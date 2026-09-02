@@ -1,6 +1,4 @@
-﻿version: '3.8'
-
-services:
+﻿services:
   postgres:
     image: postgres:16-alpine
     container_name: tapecloud-postgres
@@ -37,6 +35,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - tapecloud-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../../tc-frontend
+      dockerfile: ../tc-backend/docker/frontend.Dockerfile
+    container_name: tapecloud-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
     networks:
       - tapecloud-network
     restart: unless-stopped
