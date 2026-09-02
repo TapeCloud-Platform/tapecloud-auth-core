@@ -7,8 +7,6 @@ import com.tapecloud.sso.user.entity.Role;
 import com.tapecloud.sso.user.repository.AppUserRepository;
 import com.tapecloud.sso.user.repository.RoleRepository;
 import com.tapecloud.sso.config.JwtService;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,20 +22,17 @@ public class AuthService {
     private final AppUserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
 
     public AuthService(
             AppUserRepository userRepository,
             RoleRepository roleRepository,
             PasswordEncoder passwordEncoder,
-            AuthenticationManager authenticationManager,
             JwtService jwtService
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
-        this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
     }
 
@@ -58,17 +53,14 @@ public class AuthService {
         return buildResponse(user);
     }
 
+    @Transactional(readOnly = true)
     public AuthResponse login(AuthRequest request) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.email().trim(), request.password())
-        );
+        AppUser user = userRepository.findByEmailIgnoreCase(request.email().trim())
+                .orElseThrow(() -> new IllegalArgumentException("Credenciales inválidas"));
 
-        if (!authentication.isAuthenticated()) {
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new IllegalArgumentException("Credenciales inválidas");
         }
-
-        AppUser user = userRepository.findByEmailIgnoreCase(request.email().trim())
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
         return buildResponse(user);
     }
