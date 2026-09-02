@@ -45,6 +45,14 @@ public class JwtService {
         return extractAllClaims(token).getSubject();
     }
 
+    public List<String> extractRoles(String token) {
+        Object roles = extractAllClaims(token).get("roles");
+        if (roles instanceof List<?> roleList) {
+            return roleList.stream().map(String::valueOf).toList();
+        }
+        return List.of();
+    }
+
     public boolean isTokenValid(String token) {
         try {
             Claims claims = extractAllClaims(token);
