@@ -1,172 +1,279 @@
-# TapeCloud SSO Backend
+﻿# Índice del repositorio - TapeCloud SSO Backend
 
-Este repositorio corresponde al backend del sistema de identidad y acceso centralizado de TapeCloud. La intención actual es crear la base del proveedor de identidad que luego servirá para autenticar a las aplicaciones cliente del ecosistema.
+Este repositorio es el backend de autenticación y autorización para TapeCloud. El objetivo es servir como base para una arquitectura SSO (Single Sign-On) con una API REST segura, JWT y conexión con un frontend en React.
 
-## Indice del repositorio
+## Stack principal
 
-Dentro de `tc-backend`, la estructura actual es:
+- Java 21
+- Maven
+- Spring Boot 4.1.1
+- Spring Web MVC
+- Spring Data JPA
+- Spring Security
+- PostgreSQL
+- H2 (para tests)
+- JWT (jjwt)
+- Docker + Docker Compose
 
-```
+## Índice rápido
+
+- [Resumen del repositorio](#resumen-del-repositorio)
+- [Estructura de carpetas](#estructura-de-carpetas)
+- [Qué hace cada módulo](#qué-hace-cada-módulo)
+- [Flujo actual de autenticación](#flujo-actual-de-autenticación)
+- [Configuración importante](#configuración-importante)
+- [Cómo levantar la app](#cómo-levantar-la-app)
+- [Cómo probarlo](#cómo-probarlo)
+- [Cómo se integra con React](#cómo-se-integra-con-react)
+- [Roadmap recomendado](#roadmap-recomendado)
+
+## Resumen del repositorio
+
+El backend está pensado como una API REST stateless:
+
+1. el frontend envía usuario y password
+2. el backend valida credenciales
+3. el backend devuelve un JWT
+4. el frontend guarda el token
+5. cada request protegida lleva `Authorization: Bearer <token>`
+6. Spring Security valida el token antes de permitir el acceso
+
+Esto es la arquitectura correcta para integrar con React, porque el frontend ya no depende de sesiones del lado del servidor.
+
+## Estructura de carpetas
+
+```text
 tc-backend/
 ├── docker/
-│   ├── .dockerignore
-│   ├── .env.example
-│   ├── DOCKER.md
 │   ├── Dockerfile
-│   └── docker-compose.yml
+│   ├── docker-compose.yml
+│   └── .env.example
 ├── src/
-│   └── main/
-│       ├── java/com/tapecloud/sso/
-│       │   ├── api/
-│       │   │   └── HealthController.java
-│       │   ├── config/
-│       │   │   └── SecurityConfig.java
-│       │   └── user/
-│       │       ├── entity/
-│       │       │   ├── AppUser.java
-│       │       │   ├── Permission.java
-│       │       │   └── Role.java
-│       │       └── repository/
-│       │           ├── AppUserRepository.java
-│       │           ├── PermissionRepository.java
-│       │           └── RoleRepository.java
+│   ├── main/
+│   │   ├── java/com/tapecloud/sso/
+│   │   │   ├── api/
+│   │   │   │   ├── AuthController.java
+│   │   │   │   ├── HealthController.java
+│   │   │   │   └── GlobalExceptionHandler.java
+│   │   │   ├── config/
+│   │   │   │   ├── SecurityConfig.java
+│   │   │   │   ├── JwtAuthenticationFilter.java
+│   │   │   │   ├── JwtService.java
+│   │   │   │   ├── CustomUserDetailsService.java
+│   │   │   │   └── DataInitializer.java
+│   │   │   ├── service/
+│   │   │   │   └── AuthService.java
+│   │   │   └── user/
+│   │   │       ├── dto/
+│   │   │       │   ├── AuthRequest.java
+│   │   │       │   └── AuthResponse.java
+│   │   │       ├── entity/
+│   │   │       │   ├── AppUser.java
+│   │   │       │   ├── Role.java
+│   │   │       │   └── Permission.java
+│   │   │       └── repository/
+│   │   │           ├── AppUserRepository.java
+│   │   │           ├── RoleRepository.java
+│   │   │           └── PermissionRepository.java
+│   │   └── resources/
+│   │       └── application.properties
+│   └── test/
 │       └── resources/
 │           └── application.properties
-├── HELP.md
 ├── pom.xml
 ├── mvnw
 ├── mvnw.cmd
-├── README.md
-├── target/               # generado por Maven
-└── .gitignore
+├── .gitignore
+├── HELP.md
+└── README.md
 ```
 
-## Estado actual del backend
+## Qué hace cada módulo
 
-El proyecto ya tiene una base funcional inicial:
+### api
+Contiene los endpoints HTTP del backend.
 
-- Spring Boot configurado como aplicación backend.
-- Seguridad web inicial con Spring Security.
-- Endpoint de salud disponible en `/api/health` y `/api/version`.
-- Entidades de usuarios, roles y permisos definidas.
-- Repositorios JPA para usuarios, roles y permisos.
-- Configuración del datasource lista para PostgreSQL.
-- Configuración de contenedores Docker lista para compilar y correr la app.
+Ejemplos:
+- `/api/health`
+- `/api/version`
+- `/api/auth/login`
+- `/api/auth/register`
+- `/api/auth/me`
 
-La parte de autenticación real todavía no está implementada en profundidad. Actualmente hay una base estructural, pero falta completar la lógica de login, registro, autorización y JWT.
+### config
+Contiene la configuración central de Spring y seguridad.
 
-## Que hace esta aplicacion en este momento
+Ejemplos:
+- `SecurityConfig`: reglas de acceso, CORS, JWT filter
+- `JwtAuthenticationFilter`: valida token por request
+- `JwtService`: firma y valida tokens
+- `CustomUserDetailsService`: carga usuarios para Spring Security
+- `DataInitializer`: crea roles por defecto
 
-El backend actual sirve como base del sistema de identidad. Su objetivo inmediato es proporcionar:
+### service
+Aquí va la lógica de negocio.
 
-- almacenamiento y gestión de usuarios
-- modelado de roles y permisos
-- endpoints base de salud y validación de servicio
-- base para autenticación centralizada
-- preparación para integración con frontend y otras aplicaciones del ecosistema
+Ejemplo:
+- `AuthService` valida credenciales, crea usuarios, genera JWT
 
-## Orden de prioridad actual
+### user
+Es el módulo de dominio del usuario.
 
-La prioridad recomendada para continuar es la siguiente:
+Incluye:
+- entidades JPA
+- repositorios
+- DTOs de entrada/salida
+- lógica estructural del usuario y roles
 
-1. Definir el flujo de autenticación completo
-  - Login
-  - Registro
-  - Logout
-  - Recuperación o reset de contraseña
-  - Manejo de errores de autenticación
+## Flujo actual de autenticación
 
-2. Implementar seguridad real con JWT o session-based
-  - Generación de token
-  - Validación por filtro
-  - Roles y permisos por request
-  - Protección de endpoints sensibles
+El flujo actual es:
 
-3. Completar la capa de servicio y DTOs
-  - `AuthService`
-  - `UserService`
-  - `RoleService`
-  - `PermissionService`
-  - modelos de entrada/salida
+1. el cliente hace `POST /api/auth/login`
+2. backend recibe email y password
+3. Spring Security autentica con `AuthenticationManager`
+4. si las credenciales son válidas, genera un JWT
+5. responde `{ token, email, roles }`
+6. el frontend guarda el token
+7. en cada petición protegida envía `Authorization: Bearer <token>`
+8. el filtro JWT valida la firma y la expiración
 
-4. Definir endpoints REST de usuarios y administración
-  - crear usuario
-  - listar usuarios
-  - activar/desactivar usuario
-  - asignar roles
-  - consultar permisos
+## Configuración importante
 
-5. Consolidar la persistencia y migración de datos
-  - validar esquema de base de datos
-  - definir datos iniciales de roles
-  - revisar `ddl-auto` y estrategia de migraciones
+El archivo principal es:
 
-6. Preparar la capa de pruebas
-  - pruebas unitarias de servicio
-  - pruebas de controladores
-  - pruebas de seguridad
+- `src/main/resources/application.properties`
 
-7. Revisar y dejar operativo Docker y entorno local
-  - `.env` real a partir de `.env.example`
-  - validación de compose
-  - levantar cliente y base de datos
-  - verificar integración completa
+Variables clave:
 
-8. Documentar la API y la arquitectura
-  - endpoints disponibles
-  - ejemplos de requests/responses
-  - variables de entorno
-  - flujo de integración frontend
+```properties
+spring.datasource.url=${DB_URL:jdbc:h2:mem:tapecloud;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
+spring.datasource.username=${DB_USERNAME:sa}
+spring.datasource.password=${DB_PASSWORD:}
+spring.datasource.driver-class-name=${DB_DRIVER_CLASS_NAME:org.h2.Driver}
 
-## Estructura funcional por carpetas
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.properties.hibernate.dialect=${HIBERNATE_DIALECT:org.hibernate.dialect.H2Dialect}
 
-### `src/main/java/com/tapecloud/sso/api`
-Contiene los controladores HTTP. Actualmente tiene el controlador de salud, que es la base para validar que la aplicación responde correctamente.
+jwt.secret=${JWT_SECRET:test-secret-key-for-local-development}
+jwt.expiration-ms=${JWT_EXPIRATION_MS:86400000}
+```
 
-### `src/main/java/com/tapecloud/sso/config`
-Contiene la configuración de la aplicación. Aquí está la configuración de seguridad principal y la definición del encoder de contraseñas.
+Puntos importantes:
+- en local puede usar H2 para testing rápido
+- en Docker debe apuntar a PostgreSQL
+- JWT secret no debe quedar hardcodeado en producción
+- Fijarse siempre la URL del datasource y el driver correcto
 
-### `src/main/java/com/tapecloud/sso/user/entity`
-Contiene las entidades JPA del dominio de usuarios. En esta etapa están definidos:
+## Cómo levantar la app
 
-- `AppUser`
-- `Role`
-- `Permission`
+### Opción 1: local con Maven
 
-### `src/main/java/com/tapecloud/sso/user/repository`
-Contiene los repositorios de acceso a datos para usuarios, roles y permisos.
+```bash
+cd tc-backend
+./mvnw spring-boot:run
+```
 
-### `src/main/resources/application.properties`
-Configura la conexión a PostgreSQL y basic settings del backend.
+### Opción 2: con Docker + PostgreSQL
 
-### `docker/`
-Contiene la configuración del entorno de ejecución en contenedores:
+Desde la carpeta `docker`:
 
-- `Dockerfile` para compilar la app Java
-- `docker-compose.yml` para levantar PostgreSQL y backend
-- `.env.example` para variables de entorno
-- `DOCKER.md` con documentación específica del entorno Docker
+```bash
+docker compose up --build -d
+```
 
-## Recomendaciones de desarrollo
+Esto levanta:
+- PostgreSQL
+- backend Java
+- servicio API en `http://localhost:8080`
 
-- Mantener la lógica de autenticación centralizada en el backend del SSO.
-- No duplicar usuarios ni credenciales entre aplicaciones cliente.
-- Usar roles y permisos como base para la autorización.
-- Separar claramente entidades, repositorios, servicios y controladores.
-- Documentar cada endpoint antes de integrarlo con frontend.
+## Cómo probarlo
 
-## Estado de Docker
+### Health
 
-La configuración Docker ya fue verificada sintácticamente, sin levantar el stack. Esto significa que la estructura y el archivo Compose están bien armados para continuar con la ejecución local, pero todavía falta la preparación del entorno real (`.env`) y la validación con una ejecución real del contenedor.
+```bash
+curl http://localhost:8080/api/health
+```
 
-## Siguiente paso recomendado
+Respuesta esperada:
 
-El paso lógico siguiente no es seguir agregando features sin base, sino cerrar la autenticación real y dejar la aplicación operando sobre PostgreSQL con endpoints seguros. Si se hace en orden, el proyecto pasa de una base de arquitectura a un backend de identidad funcional.
+```text
+Backend TapeCloud SSO funcionando
+```
 
-## Resumen corto
+### Version
 
-Este repositorio está en una etapa inicial de infraestructura y modelo de dominio, con una base Spring Boot y Spring Security armada. El siguiente objetivo principal es completar la autenticación, la autorización y la integración con PostgreSQL para convertirlo en un SSO funcional.
+```bash
+curl http://localhost:8080/api/version
+```
 
-# Licencia
+### Registro
 
-Proyecto desarrollado con fines educativos y como portfolio personal.
+```bash
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@tapecloud.com",
+    "password": "123456",
+    "name": "Admin",
+    "lastName": "TapeCloud"
+  }'
+```
+
+### Login
+
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@tapecloud.com",
+    "password": "123456"
+  }'
+```
+
+## Cómo se integra con React
+
+La integración recomendada es:
+
+- React hace login en el backend
+- backend devuelve JWT
+- frontend guarda el token en `localStorage` o memoria
+- cada request autenticada envía `Authorization: Bearer ...`
+- rutas protegidas se bloquean si no hay token válido
+
+Flujo típico:
+
+```text
+React login form
+   ↓
+POST /api/auth/login
+   ↓
+JWT generado por backend
+   ↓
+React guarda token
+   ↓
+Siguiente request usa el token en headers
+```
+
+Esto exige:
+- CORS habilitado en backend
+- frontend en puerto distinto al backend
+- headers correctos en requests
+- manejo de errores de autenticación
+
+## Roadmap recomendado
+
+1. validar registro y login con JWT end-to-end
+2. agregar manejo robusto de errores
+3. definir roles y permisos más claros
+4. crear endpoints para usuarios/admin
+5. agregar refresh token
+6. preparar integración con React
+7. pruebas de integración reales
+8. seguridad y despliegue en entorno productivo
+
+## Punto clave del proyecto
+
+Este backend ya está orientado a una API REST moderna, no a una app web tradicional con sesiones del servidor. Eso lo hace compatible con React, apps móviles y sistemas distribuidos.
+
+Es un buen punto de partida para continuar desarrollando un SSO real y escalable.
