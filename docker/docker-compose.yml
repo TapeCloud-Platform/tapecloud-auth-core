@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tapecloud-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tapecloud}
+      POSTGRES_USER: ${POSTGRES_USER:-tapecloud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tapecloud}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tapecloud-network
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: tapecloud-backend
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-tapecloud}
+      DB_USERNAME: ${POSTGRES_USER:-tapecloud}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      JAVA_OPTS: "-Xmx512m -Xms256m"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tapecloud-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  tapecloud-network:
+    driver: bridge
