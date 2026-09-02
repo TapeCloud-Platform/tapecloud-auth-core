@@ -1,222 +1,171 @@
-# TapeCloud Platform
+# TapeCloud SSO Backend
 
-> **Plataforma de identidad y acceso centralizado para el ecosistema Tape.**
+Este repositorio corresponde al backend del sistema de identidad y acceso centralizado de TapeCloud. La intención actual es crear la base del proveedor de identidad que luego servirá para autenticar a las aplicaciones cliente del ecosistema.
 
-TapeCloud Platform es un ecosistema de aplicaciones compuesto por un proveedor de identidad centralizado (**Single Sign-On**) y múltiples aplicaciones cliente independientes.
+## Indice del repositorio
 
-En lugar de que cada aplicación gestione sus propios usuarios, credenciales y sesiones, TapeCloud actúa como el punto central de autenticación y autorización, permitiendo que un usuario inicie sesión una única vez y acceda únicamente a las aplicaciones para las que posee permisos.
-
-Este proyecto fue desarrollado como trabajo final integrador con el objetivo de simular una arquitectura inspirada en sistemas empresariales reales y servir como proyecto de portfolio.
-
----
-
-# Visión General
-
-El ecosistema está compuesto por tres aplicaciones principales:
+Dentro de `tc-backend`, la estructura actual es:
 
 ```
-                  TapeCloud Platform
-        ┌────────────────────────────────┐
-        │  Identidad y Gestión de Acceso │
-        │  Autenticación Centralizada    │
-        │  Portal de Aplicaciones        │
-        └──────────────┬─────────────────┘
-                       │
-          ┌────────────┴────────────┐
-          │                         │
-     TapeFlix                  TapeBeat
- Películas y Series              Música
+tc-backend/
+├── docker/
+│   ├── .dockerignore
+│   ├── .env.example
+│   ├── DOCKER.md
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── src/
+│   └── main/
+│       ├── java/com/tapecloud/sso/
+│       │   ├── api/
+│       │   │   └── HealthController.java
+│       │   ├── config/
+│       │   │   └── SecurityConfig.java
+│       │   └── user/
+│       │       ├── entity/
+│       │       │   ├── AppUser.java
+│       │       │   ├── Permission.java
+│       │       │   └── Role.java
+│       │       └── repository/
+│       │           ├── AppUserRepository.java
+│       │           ├── PermissionRepository.java
+│       │           └── RoleRepository.java
+│       └── resources/
+│           └── application.properties
+├── HELP.md
+├── pom.xml
+├── mvnw
+├── mvnw.cmd
+├── README.md
+├── target/               # generado por Maven
+└── .gitignore
 ```
 
-Cada aplicación se especializa en un dominio específico y delega completamente la autenticación en TapeCloud.
+## Estado actual del backend
 
----
+El proyecto ya tiene una base funcional inicial:
 
-# ¿Qué es TapeCloud?
+- Spring Boot configurado como aplicación backend.
+- Seguridad web inicial con Spring Security.
+- Endpoint de salud disponible en `/api/health` y `/api/version`.
+- Entidades de usuarios, roles y permisos definidas.
+- Repositorios JPA para usuarios, roles y permisos.
+- Configuración del datasource lista para PostgreSQL.
+- Configuración de contenedores Docker lista para compilar y correr la app.
 
-TapeCloud no es únicamente un sistema de login.
+La parte de autenticación real todavía no está implementada en profundidad. Actualmente hay una base estructural, pero falta completar la lógica de login, registro, autorización y JWT.
 
-Es el centro del ecosistema y el responsable de administrar la identidad de todos los usuarios.
+## Que hace esta aplicacion en este momento
 
-Entre sus responsabilidades se encuentran:
+El backend actual sirve como base del sistema de identidad. Su objetivo inmediato es proporcionar:
 
-* Autenticación centralizada (SSO)
-* Administración de usuarios
-* Administración de roles y permisos
-* Registro de aplicaciones cliente
-* Gestión de sesiones
-* Cambio obligatorio de contraseña
-* Portal de aplicaciones
-* Control de acceso entre sistemas
+- almacenamiento y gestión de usuarios
+- modelado de roles y permisos
+- endpoints base de salud y validación de servicio
+- base para autenticación centralizada
+- preparación para integración con frontend y otras aplicaciones del ecosistema
 
-Después de iniciar sesión, el usuario accede a un portal desde el cual puede visualizar únicamente las aplicaciones habilitadas para su cuenta.
+## Orden de prioridad actual
 
----
+La prioridad recomendada para continuar es la siguiente:
 
-# Aplicaciones del Ecosistema
+1. Definir el flujo de autenticación completo
+  - Login
+  - Registro
+  - Logout
+  - Recuperación o reset de contraseña
+  - Manejo de errores de autenticación
 
-## TapeCloud
+2. Implementar seguridad real con JWT o session-based
+  - Generación de token
+  - Validación por filtro
+  - Roles y permisos por request
+  - Protección de endpoints sensibles
 
-Centro de identidad y acceso del ecosistema.
+3. Completar la capa de servicio y DTOs
+  - `AuthService`
+  - `UserService`
+  - `RoleService`
+  - `PermissionService`
+  - modelos de entrada/salida
 
-Responsabilidades:
+4. Definir endpoints REST de usuarios y administración
+  - crear usuario
+  - listar usuarios
+  - activar/desactivar usuario
+  - asignar roles
+  - consultar permisos
 
-* Login único
-* Gestión de usuarios
-* Gestión de roles
-* Gestión de permisos
-* Registro de aplicaciones
-* Administración de sesiones
-* Portal de aplicaciones
+5. Consolidar la persistencia y migración de datos
+  - validar esquema de base de datos
+  - definir datos iniciales de roles
+  - revisar `ddl-auto` y estrategia de migraciones
 
----
+6. Preparar la capa de pruebas
+  - pruebas unitarias de servicio
+  - pruebas de controladores
+  - pruebas de seguridad
 
-## TapeFlix
+7. Revisar y dejar operativo Docker y entorno local
+  - `.env` real a partir de `.env.example`
+  - validación de compose
+  - levantar cliente y base de datos
+  - verificar integración completa
 
-Aplicación dedicada a la gestión y exploración de películas y series.
+8. Documentar la API y la arquitectura
+  - endpoints disponibles
+  - ejemplos de requests/responses
+  - variables de entorno
+  - flujo de integración frontend
 
-Incluye funcionalidades como:
+## Estructura funcional por carpetas
 
-* Catálogo
-* Búsqueda
-* Filtros
-* Página de detalle
-* Favoritos
-* Estado de visualización
+### `src/main/java/com/tapecloud/sso/api`
+Contiene los controladores HTTP. Actualmente tiene el controlador de salud, que es la base para validar que la aplicación responde correctamente.
 
-Toda la autenticación es realizada por TapeCloud.
+### `src/main/java/com/tapecloud/sso/config`
+Contiene la configuración de la aplicación. Aquí está la configuración de seguridad principal y la definición del encoder de contraseñas.
 
----
+### `src/main/java/com/tapecloud/sso/user/entity`
+Contiene las entidades JPA del dominio de usuarios. En esta etapa están definidos:
 
-## TapeBeat
+- `AppUser`
+- `Role`
+- `Permission`
 
-Aplicación dedicada a la gestión y exploración de música.
+### `src/main/java/com/tapecloud/sso/user/repository`
+Contiene los repositorios de acceso a datos para usuarios, roles y permisos.
 
-Incluye funcionalidades como:
+### `src/main/resources/application.properties`
+Configura la conexión a PostgreSQL y basic settings del backend.
 
-* Catálogo de álbumes y artistas
-* Búsqueda
-* Filtros
-* Favoritos
-* Estado de escucha
-* Página de detalle
+### `docker/`
+Contiene la configuración del entorno de ejecución en contenedores:
 
-Al igual que TapeFlix, no administra usuarios propios.
+- `Dockerfile` para compilar la app Java
+- `docker-compose.yml` para levantar PostgreSQL y backend
+- `.env.example` para variables de entorno
+- `DOCKER.md` con documentación específica del entorno Docker
 
----
+## Recomendaciones de desarrollo
 
-# Flujo de Autenticación
+- Mantener la lógica de autenticación centralizada en el backend del SSO.
+- No duplicar usuarios ni credenciales entre aplicaciones cliente.
+- Usar roles y permisos como base para la autorización.
+- Separar claramente entidades, repositorios, servicios y controladores.
+- Documentar cada endpoint antes de integrarlo con frontend.
 
-```text
-Usuario
-   │
-   ▼
-TapeFlix / TapeBeat
-   │
-No existe una sesión válida
-   │
-   ▼
-TapeCloud
-(Login)
-   │
-Credenciales válidas
-   │
-   ▼
-Se genera la sesión
-   │
-   ▼
-Redirección automática
-   │
-   ▼
-Aplicación cliente
-```
+## Estado de Docker
 
-El usuario inicia sesión una sola vez y puede acceder a todas las aplicaciones habilitadas sin volver a autenticarse.
+La configuración Docker ya fue verificada sintácticamente, sin levantar el stack. Esto significa que la estructura y el archivo Compose están bien armados para continuar con la ejecución local, pero todavía falta la preparación del entorno real (`.env`) y la validación con una ejecución real del contenedor.
 
----
+## Siguiente paso recomendado
 
-# Principios de la Arquitectura
+El paso lógico siguiente no es seguir agregando features sin base, sino cerrar la autenticación real y dejar la aplicación operando sobre PostgreSQL con endpoints seguros. Si se hace en orden, el proyecto pasa de una base de arquitectura a un backend de identidad funcional.
 
-La plataforma sigue un modelo **Hub & Spoke**, donde TapeCloud actúa como núcleo del ecosistema.
+## Resumen corto
 
-```
-                   TapeCloud
-              Identity Provider
-                     │
-      ┌──────────────┼──────────────┐
-      │                             │
- TapeFlix                      TapeBeat
- Aplicación Cliente        Aplicación Cliente
-```
-
-Esta arquitectura permite:
-
-* Centralizar la autenticación.
-* Mantener desacopladas las aplicaciones.
-* Escalar el ecosistema incorporando nuevos sistemas.
-* Evitar duplicación de usuarios y credenciales.
-
----
-
-# Tecnologías
-
-## Backend
-
-* Spring Boot
-* Spring Security
-* Spring Data JPA
-* JWT
-* PostgreSQL
-
-## Frontend
-
-* React
-* TypeScript
-* Tailwind CSS
-
-## Infraestructura
-
-* Docker
-* Docker Compose
-
----
-
-# Objetivos del Proyecto
-
-* Implementar un sistema de autenticación centralizado.
-* Simular una arquitectura empresarial desacoplada.
-* Gestionar usuarios, roles y permisos desde un único punto.
-* Integrar múltiples aplicaciones cliente bajo un mismo ecosistema.
-* Desarrollar un proyecto orientado a portfolio.
-
----
-
-# Estructura del Proyecto
-
-```
-tapecloud-platform
-
-├── tapecloud-sso-backend
-├── tapecloud-sso-frontend
-├── tapeflix
-└── tapebeat
-```
-
----
-
-# Escalabilidad
-
-La arquitectura fue diseñada para permitir la incorporación de nuevas aplicaciones sin modificar las existentes.
-
-En el futuro podrían agregarse nuevos dominios como:
-
-* TapeBooks
-* TapeGames
-* TapePhotos
-
-Todas compartirían el mismo sistema de autenticación y gestión de identidad proporcionado por TapeCloud.
-
----
+Este repositorio está en una etapa inicial de infraestructura y modelo de dominio, con una base Spring Boot y Spring Security armada. El siguiente objetivo principal es completar la autenticación, la autorización y la integración con PostgreSQL para convertirlo en un SSO funcional.
 
 # Licencia
 
