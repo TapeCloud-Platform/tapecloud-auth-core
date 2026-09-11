@@ -9,8 +9,10 @@ import com.tapecloud.auth.user.entity.AppUser;
 import com.tapecloud.auth.user.entity.Role;
 import com.tapecloud.auth.user.repository.AppUserRepository;
 import com.tapecloud.auth.user.repository.RoleRepository;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,6 +26,9 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+
+    @Value("${tapecloud.admin.emails:totosanchez2610@gmail.com,admin@tapecloud.com}")
+    private String adminEmailsProperty;
 
     public AuthService(
             AppUserRepository userRepository,
@@ -49,10 +54,29 @@ public class AuthService {
 
         AppUser user = new AppUser(normalizedEmail.toLowerCase(Locale.ROOT), passwordEncoder.encode(request.password()));
         user.addRole(defaultRole);
+
+        if (isAdminEmail(normalizedEmail)) {
+            Role adminRole = roleRepository.findByName("ROLE_ADMIN")
+                    .orElseGet(() -> roleRepository.save(new Role("ROLE_ADMIN")));
+            user.addRole(adminRole);
+        }
+
         userRepository.save(user);
 
         return buildResponse(user);
     }
+
+    private boolean isAdminEmail(String email) {
+        if (adminEmailsProperty == null || adminEmailsProperty.isBlank()) {
+            return false;
+        }
+        String lowerEmail = email.toLowerCase(Locale.ROOT);
+        return Arrays.stream(adminEmailsProperty.split(","))
+                .map(String::trim)
+                .map(e -> e.toLowerCase(Locale.ROOT))
+                .anyMatch(lowerEmail::equals);
+    }
+
 
     @Transactional(readOnly = true)
     public AuthResponse login(AuthRequest request) {

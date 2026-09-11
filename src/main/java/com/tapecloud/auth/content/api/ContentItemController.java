@@ -6,7 +6,11 @@ import com.tapecloud.auth.content.service.ContentItemService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +37,16 @@ public class ContentItemController {
         return service.find(sourceApp, sourceType);
     }
 
+    @GetMapping("/paginated")
+    public Page<ContentItem> findPaginated(
+            @RequestParam(required = false) String sourceApp,
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) String genre,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int limit) {
+        return service.findPaginated(sourceApp, sourceType, genre, PageRequest.of(page, limit));
+    }
+
     @GetMapping("/{id}")
     public ContentItem findById(@PathVariable UUID id) {
         return service.findById(id);
@@ -42,5 +56,12 @@ public class ContentItemController {
     @ResponseStatus(HttpStatus.CREATED)
     public ContentItem save(@Valid @RequestBody ContentItemRequest request) {
         return service.save(request);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('ADMIN')")
+    public void delete(@PathVariable UUID id) {
+        service.deleteById(id);
     }
 }
