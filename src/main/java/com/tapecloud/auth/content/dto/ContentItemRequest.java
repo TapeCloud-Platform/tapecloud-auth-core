@@ -11,6 +11,7 @@ public record ContentItemRequest(
         @NotBlank @Size(max = 250) String title,
         @Size(max = 4000) String description,
         @Size(max = 1000) String imageUrl,
-        LocalDate releaseDate
+        LocalDate releaseDate,
+        @Size(max = 250) String genre
 ) {
 }

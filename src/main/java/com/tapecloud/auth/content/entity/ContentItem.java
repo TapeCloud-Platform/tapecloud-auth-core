@@ -36,7 +36,11 @@ public class ContentItem {
     @Column(length = 1000)
     private String imageUrl;
 
+    @Column(length = 250)
+    private String genre;
+
     private LocalDate releaseDate;
+
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -48,7 +52,7 @@ public class ContentItem {
     }
 
     public ContentItem(String sourceApp, String sourceType, String externalId, String title,
-                       String description, String imageUrl, LocalDate releaseDate) {
+                       String description, String imageUrl, LocalDate releaseDate, String genre) {
         this.sourceApp = sourceApp;
         this.sourceType = sourceType;
         this.externalId = externalId;
@@ -56,6 +60,7 @@ public class ContentItem {
         this.description = description;
         this.imageUrl = imageUrl;
         this.releaseDate = releaseDate;
+        this.genre = genre;
     }
 
     @jakarta.persistence.PrePersist
@@ -77,14 +82,16 @@ public class ContentItem {
     public String getTitle() { return title; }
     public String getDescription() { return description; }
     public String getImageUrl() { return imageUrl; }
+    public String getGenre() { return genre; }
     public LocalDate getReleaseDate() { return releaseDate; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 
-    public void updateDetails(String title, String description, String imageUrl, LocalDate releaseDate) {
+    public void updateDetails(String title, String description, String imageUrl, LocalDate releaseDate, String genre) {
         this.title = title;
         this.description = description;
         this.imageUrl = imageUrl;
         this.releaseDate = releaseDate;
+        this.genre = genre;
     }
 }
