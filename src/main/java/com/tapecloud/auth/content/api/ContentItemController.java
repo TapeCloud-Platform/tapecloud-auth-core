@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,6 +46,17 @@ public class ContentItemController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int limit) {
         return service.findPaginated(sourceApp, sourceType, genre, PageRequest.of(page, limit));
+    }
+
+    // 204 en vez de 404: la ausencia es un resultado válido y así el navegador no la registra como error.
+    @GetMapping("/lookup")
+    public ResponseEntity<ContentItem> lookup(
+            @RequestParam String sourceApp,
+            @RequestParam(defaultValue = "movie") String sourceType,
+            @RequestParam String externalId) {
+        return service.findByExternalIdOptional(sourceApp, sourceType, externalId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @GetMapping("/{id}")
