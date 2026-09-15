@@ -40,7 +40,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/health", "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/content/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/discover/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/content/sync/tmdb/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/content/sync/lastfm/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/**", "/api/comments/**").permitAll()
                         .requestMatchers("/api/comments/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/content/**").hasRole("ADMIN")
