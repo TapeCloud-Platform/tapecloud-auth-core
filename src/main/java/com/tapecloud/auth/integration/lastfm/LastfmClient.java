@@ -1,10 +1,15 @@
 package com.tapecloud.auth.integration.lastfm;
 
+import com.tapecloud.auth.integration.lastfm.dto.LastfmAlbumInfoResponse;
+import com.tapecloud.auth.integration.lastfm.dto.LastfmArtistInfoResponse;
+import com.tapecloud.auth.integration.lastfm.dto.LastfmArtistSearchResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmChartResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmSearchResponse;
+import com.tapecloud.auth.integration.lastfm.dto.LastfmTopAlbumsResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmTrackInfoResponse;
 import java.util.function.UnaryOperator;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -90,6 +95,64 @@ public class LastfmClient {
                 .toUriString();
 
         return restClient.get().uri(uri).retrieve().body(LastfmSearchResponse.class);
+    }
+
+    public LastfmTopAlbumsResponse fetchArtistAlbums(String artist, int limit) {
+        requireApiKey();
+
+        String uri = baseBuilder()
+                .queryParam("method", "artist.getTopAlbums")
+                .queryParam("artist", artist)
+                .queryParam("limit", limit)
+                .encode()
+                .build()
+                .toUriString();
+
+        return restClient.get().uri(uri).retrieve().body(LastfmTopAlbumsResponse.class);
+    }
+
+    @Cacheable(value = "lastfmAlbums", unless = "#result == null")
+    public LastfmAlbumInfoResponse fetchAlbumInfo(String artist, String album) {
+        requireApiKey();
+
+        String uri = baseBuilder()
+                .queryParam("method", "album.getInfo")
+                .queryParam("artist", artist)
+                .queryParam("album", album)
+                .encode()
+                .build()
+                .toUriString();
+
+        return restClient.get().uri(uri).retrieve().body(LastfmAlbumInfoResponse.class);
+    }
+
+    /** artist.search tolera coincidencias parciales y erratas: "Soda" devuelve "Soda Stereo". */
+    public LastfmArtistSearchResponse searchArtists(String query, int limit) {
+        requireApiKey();
+
+        String uri = baseBuilder()
+                .queryParam("method", "artist.search")
+                .queryParam("artist", query)
+                .queryParam("limit", limit)
+                .encode()
+                .build()
+                .toUriString();
+
+        return restClient.get().uri(uri).retrieve().body(LastfmArtistSearchResponse.class);
+    }
+
+    public LastfmArtistInfoResponse fetchArtistInfo(String artist) {
+        requireApiKey();
+
+        String uri = baseBuilder()
+                .queryParam("method", "artist.getInfo")
+                .queryParam("artist", artist)
+                .queryParam("autocorrect", 1)
+                .encode()
+                .build()
+                .toUriString();
+
+        return restClient.get().uri(uri).retrieve().body(LastfmArtistInfoResponse.class);
     }
 
     private LastfmChartResponse getChart(UnaryOperator<UriComponentsBuilder> customizer) {
