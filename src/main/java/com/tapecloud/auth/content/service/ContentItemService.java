@@ -50,6 +50,10 @@ public class ContentItemService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contenido no encontrado"));
     }
 
+    public java.util.Optional<ContentItem> findByExternalIdOptional(String sourceApp, String sourceType, String externalId) {
+        return repository.findBySourceAppAndSourceTypeAndExternalId(sourceApp, sourceType, externalId);
+    }
+
     public ContentItem save(ContentItemRequest request) {
         ContentItem item = repository.findBySourceAppAndSourceTypeAndExternalId(
                 request.sourceApp(), request.sourceType(), request.externalId())

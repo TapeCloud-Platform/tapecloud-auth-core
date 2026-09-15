@@ -24,7 +24,7 @@ public class LastfmSyncService {
     }
 
     public List<ContentItem> syncTopTracks(int page, int limit) {
-        List<LastfmTrackDto> tracks = lastfmClient.fetchTopTracks(page, limit).tracks().track();
+        List<LastfmTrackDto> tracks = lastfmClient.fetchTopTracks(page, limit).trackList();
 
         return tracks.stream()
                 .map(this::toContentItem)
