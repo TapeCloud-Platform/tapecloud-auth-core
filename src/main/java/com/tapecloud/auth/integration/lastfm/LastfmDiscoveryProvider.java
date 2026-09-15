@@ -96,13 +96,13 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
                 new DiscoveryFilter("genre", "Género", true, GENRES),
                 new DiscoveryFilter("country", "País", false, COUNTRIES),
                 new DiscoveryFilter("artist", "Artista", true, List.of()),
-                new DiscoveryFilter("search", "Buscar canción", true, List.of())
+                new DiscoveryFilter("search", "Todo", true, List.of())
         );
     }
 
     @Override
     public List<DiscoveryItem> discover(String type, String value, int limit) {
-        if ("search".equals(type)) {
+        if ("search".equals(type) || "artist".equals(type)) {
             return unifiedSearch(requireValue(value, "búsqueda"), limit);
         }
         if ("discography".equals(type)) {
@@ -113,7 +113,6 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
             case "top" -> lastfmClient.fetchTopTracks(1, limit).trackList();
             case "genre" -> lastfmClient.fetchTracksByTag(requireValue(value, "género"), limit).trackList();
             case "country" -> lastfmClient.fetchTracksByCountry(requireValue(value, "país"), limit).trackList();
-            case "artist" -> lastfmClient.fetchTracksByArtist(requireValue(value, "artista"), limit).trackList();
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Filtro no soportado: " + type);
         };
 
