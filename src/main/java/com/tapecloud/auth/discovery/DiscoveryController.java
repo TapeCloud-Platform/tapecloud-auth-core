@@ -39,6 +39,11 @@ public class DiscoveryController {
         return provider(sourceApp).discover(type, value, Math.min(limit, MAX_LIMIT));
     }
 
+    @GetMapping("/{sourceApp}/profile")
+    public DiscoveryProfile profile(@PathVariable String sourceApp, @RequestParam String value) {
+        return provider(sourceApp).profile(value);
+    }
+
     private DiscoveryProvider provider(String sourceApp) {
         DiscoveryProvider provider = providers.get(sourceApp);
         if (provider == null) {
