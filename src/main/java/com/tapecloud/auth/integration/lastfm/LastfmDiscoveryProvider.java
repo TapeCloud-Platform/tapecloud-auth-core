@@ -5,6 +5,7 @@ import com.tapecloud.auth.discovery.DiscoveryFilterOption;
 import com.tapecloud.auth.discovery.DiscoveryItem;
 import com.tapecloud.auth.discovery.DiscoveryProfile;
 import com.tapecloud.auth.discovery.DiscoveryProvider;
+import com.tapecloud.auth.discovery.DiscoveryTrackDetail;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmAlbumInfoResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmArtistInfoResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmArtistSearchResponse;
@@ -220,6 +221,43 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
                 names(info.similar() != null ? info.similar().artist() : null,
                         LastfmArtistInfoResponse.SimilarArtist::name)
         );
+    }
+
+    /**
+     * El álbum de origen no viaja en discover(): hace falta track.getInfo para el nombre y,
+     * si hay álbum, album.getInfo para la portada grande y la descripción.
+     */
+    @Override
+    public DiscoveryTrackDetail trackDetail(String artist, String track) {
+        LastfmTrackInfoResponse info = lastfmClient.fetchTrackInfo(artist, track);
+        if (info == null || info.track() == null || info.track().album() == null) {
+            return null;
+        }
+
+        String albumName = info.track().album().title();
+        if (albumName == null || albumName.isBlank()) {
+            return null;
+        }
+
+        String fallbackImage = LastfmImages.largest(info.track().album().image());
+        try {
+            // La wiki y el tracklist dependen de qué tan documentado esté el álbum en
+            // Last.fm: para discos muy conocidos vienen completos, para compilados o
+            // ediciones menores suelen faltar. Cuando faltan, se degrada con gracia
+            // mostrando solo nombre + portada del álbum.
+            LastfmAlbumInfoResponse albumInfo = lastfmClient.fetchAlbumInfo(artist, albumName);
+            String imageUrl = albumInfo != null && albumInfo.imageUrl() != null
+                    ? albumInfo.imageUrl()
+                    : fallbackImage;
+            return new DiscoveryTrackDetail(
+                    albumName,
+                    imageUrl,
+                    albumInfo != null ? albumInfo.summary() : null,
+                    albumInfo != null ? albumInfo.trackCount() : 0);
+        } catch (Exception e) {
+            // El álbum existe según track.getInfo pero album.getInfo no lo reconoce (título ambiguo).
+            return new DiscoveryTrackDetail(albumName, fallbackImage, null, 0);
+        }
     }
 
     private static <T> List<String> names(List<T> source, java.util.function.Function<T, String> mapper) {

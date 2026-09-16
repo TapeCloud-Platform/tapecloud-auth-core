@@ -20,4 +20,9 @@ public interface DiscoveryProvider {
         throw new ResponseStatusException(
                 HttpStatus.NOT_IMPLEMENTED, "%s no expone perfiles".formatted(sourceApp()));
     }
+
+    default DiscoveryTrackDetail trackDetail(String artist, String track) {
+        throw new ResponseStatusException(
+                HttpStatus.NOT_IMPLEMENTED, "%s no expone detalle de canción".formatted(sourceApp()));
+    }
 }

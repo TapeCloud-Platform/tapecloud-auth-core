@@ -119,6 +119,7 @@ public class LastfmClient {
                 .queryParam("method", "album.getInfo")
                 .queryParam("artist", artist)
                 .queryParam("album", album)
+                .queryParam("autocorrect", 1)
                 .encode()
                 .build()
                 .toUriString();
