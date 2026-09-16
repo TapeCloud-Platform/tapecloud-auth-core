@@ -10,7 +10,11 @@ public record LastfmAlbumInfoResponse(
 ) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Album(String name, Tracks tracks) {
+    public record Album(String name, List<LastfmImageDto> image, Wiki wiki, Tracks tracks) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Wiki(String summary) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -30,5 +34,20 @@ public record LastfmAlbumInfoResponse(
             return 0;
         }
         return album.tracks().track().size();
+    }
+
+    public String imageUrl() {
+        return album == null ? null : LastfmImages.largest(album.image());
+    }
+
+    /** La descripción trae HTML y un enlace de atribución al final que no aporta en la ficha. */
+    public String summary() {
+        if (album == null || album.wiki() == null || album.wiki().summary() == null) {
+            return null;
+        }
+        return album.wiki().summary()
+                .replaceAll("<a href.*?</a>", "")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 }

@@ -44,6 +44,14 @@ public class DiscoveryController {
         return provider(sourceApp).profile(value);
     }
 
+    @GetMapping("/{sourceApp}/track")
+    public DiscoveryTrackDetail trackDetail(
+            @PathVariable String sourceApp,
+            @RequestParam String artist,
+            @RequestParam String track) {
+        return provider(sourceApp).trackDetail(artist, track);
+    }
+
     private DiscoveryProvider provider(String sourceApp) {
         DiscoveryProvider provider = providers.get(sourceApp);
         if (provider == null) {
