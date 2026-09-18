@@ -18,4 +18,6 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     long countByContentSourceApp(String sourceApp);
 
     long countByAuthorEmail(String authorEmail);
+
+    long countByAuthorEmailAndContentSourceApp(String authorEmail, String sourceApp);
 }

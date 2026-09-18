@@ -4,6 +4,7 @@ import com.tapecloud.auth.content.entity.ContentItem;
 import com.tapecloud.auth.content.repository.ContentItemRepository;
 import com.tapecloud.auth.review.dto.ReviewRequest;
 import com.tapecloud.auth.review.dto.ReviewResponse;
+import com.tapecloud.auth.review.dto.ReviewStatsResponse;
 import com.tapecloud.auth.review.entity.Review;
 import com.tapecloud.auth.review.entity.ReviewLike;
 import com.tapecloud.auth.review.repository.CommentRepository;
@@ -95,6 +96,30 @@ public class ReviewService {
         }
 
         return toResponse(review, userEmail);
+    }
+
+    @Transactional(readOnly = true)
+    public ReviewStatsResponse getMyStats(String userEmail) {
+        long tapebeatReviews = reviewRepository.countByAuthorEmailAndContentSourceApp(userEmail, "tapebeat");
+        long tapeflixReviews = reviewRepository.countByAuthorEmailAndContentSourceApp(userEmail, "tapeflix");
+
+        Review mostLiked = null;
+        long mostLikedCount = 0;
+        for (Review review : reviewRepository.findByAuthorEmailOrderByCreatedAtDesc(userEmail)) {
+            long likes = reviewLikeRepository.countByReviewId(review.getId());
+            if (mostLiked == null || likes > mostLikedCount) {
+                mostLiked = review;
+                mostLikedCount = likes;
+            }
+        }
+
+        return new ReviewStatsResponse(
+                tapebeatReviews,
+                tapeflixReviews,
+                mostLiked != null ? mostLiked.getTitle() : null,
+                mostLiked != null ? mostLiked.getContent().getSourceApp() : null,
+                mostLikedCount
+        );
     }
 
     @Transactional
