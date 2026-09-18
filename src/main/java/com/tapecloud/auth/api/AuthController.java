@@ -1,10 +1,14 @@
 package com.tapecloud.auth.api;
 
 import com.tapecloud.auth.service.AuthService;
-import com.tapecloud.auth.user.dto.AuthRequest;
 import com.tapecloud.auth.user.dto.AuthResponse;
 import com.tapecloud.auth.user.dto.ChangePasswordRequest;
-import com.tapecloud.auth.user.dto.UpdateDisplayNameRequest;
+import com.tapecloud.auth.user.dto.LoginRequest;
+import com.tapecloud.auth.user.dto.RegisterRequest;
+import com.tapecloud.auth.user.dto.RegisterResponse;
+import com.tapecloud.auth.user.dto.ResendCodeRequest;
+import com.tapecloud.auth.user.dto.UpdateUsernameRequest;
+import com.tapecloud.auth.user.dto.VerifyEmailRequest;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -28,12 +32,23 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody AuthRequest request) {
+    public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
     }
 
+    @PostMapping("/verify-email")
+    public ResponseEntity<AuthResponse> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        return ResponseEntity.ok(authService.verifyEmail(request));
+    }
+
+    @PostMapping("/resend-code")
+    public ResponseEntity<Void> resendCode(@Valid @RequestBody ResendCodeRequest request) {
+        authService.resendVerificationCode(request);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody AuthRequest request) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
 
@@ -45,12 +60,12 @@ public class AuthController {
         ));
     }
 
-    @PatchMapping("/me/display-name")
-    public ResponseEntity<AuthResponse> updateDisplayName(
+    @PatchMapping("/me/username")
+    public ResponseEntity<AuthResponse> updateUsername(
             Authentication authentication,
-            @Valid @RequestBody UpdateDisplayNameRequest request
+            @Valid @RequestBody UpdateUsernameRequest request
     ) {
-        return ResponseEntity.ok(authService.updateDisplayName(authentication.getName(), request));
+        return ResponseEntity.ok(authService.updateUsername(authentication.getName(), request));
     }
 
     @PatchMapping("/me/password")

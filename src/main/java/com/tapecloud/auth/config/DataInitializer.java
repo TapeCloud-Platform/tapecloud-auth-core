@@ -56,6 +56,7 @@ public class DataInitializer implements CommandLineRunner {
                         AppUser newAdmin = new AppUser(email, passwordEncoder.encode("admin123"));
                         newAdmin.addRole(userRole);
                         newAdmin.addRole(adminRole);
+                        newAdmin.setEmailVerified(true);
                         userRepository.save(newAdmin);
                     }
             );
