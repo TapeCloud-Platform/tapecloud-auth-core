@@ -13,6 +13,8 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     List<Review> findByAuthorEmailOrderByCreatedAtDesc(String authorEmail);
 
+    boolean existsByContentIdAndAuthorEmailIgnoreCase(UUID contentId, String authorEmail);
+
     long countByContentSourceApp(String sourceApp);
 
     long countByAuthorEmail(String authorEmail);
