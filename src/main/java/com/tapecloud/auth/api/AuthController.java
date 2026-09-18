@@ -7,6 +7,9 @@ import com.tapecloud.auth.user.dto.LoginRequest;
 import com.tapecloud.auth.user.dto.RegisterRequest;
 import com.tapecloud.auth.user.dto.RegisterResponse;
 import com.tapecloud.auth.user.dto.ResendCodeRequest;
+import com.tapecloud.auth.user.dto.TotpDisableRequest;
+import com.tapecloud.auth.user.dto.TotpEnableRequest;
+import com.tapecloud.auth.user.dto.TotpSetupResponse;
 import com.tapecloud.auth.user.dto.UpdateUsernameRequest;
 import com.tapecloud.auth.user.dto.VerifyEmailRequest;
 import jakarta.validation.Valid;
@@ -56,8 +59,32 @@ public class AuthController {
     public ResponseEntity<Map<String, Object>> me(Authentication authentication) {
         return ResponseEntity.ok(Map.of(
                 "email", authentication.getName(),
-                "roles", authService.currentUserRoles(authentication)
+                "roles", authService.currentUserRoles(authentication),
+                "totpEnabled", authService.isTotpEnabled(authentication.getName())
         ));
+    }
+
+    @PostMapping("/2fa/setup")
+    public ResponseEntity<TotpSetupResponse> setupTotp(Authentication authentication) {
+        return ResponseEntity.ok(authService.setupTotp(authentication.getName()));
+    }
+
+    @PostMapping("/2fa/enable")
+    public ResponseEntity<Void> enableTotp(
+            Authentication authentication,
+            @Valid @RequestBody TotpEnableRequest request
+    ) {
+        authService.enableTotp(authentication.getName(), request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/2fa/disable")
+    public ResponseEntity<Void> disableTotp(
+            Authentication authentication,
+            @Valid @RequestBody TotpDisableRequest request
+    ) {
+        authService.disableTotp(authentication.getName(), request);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/me/username")
