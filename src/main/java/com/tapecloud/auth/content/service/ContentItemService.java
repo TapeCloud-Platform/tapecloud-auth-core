@@ -54,18 +54,17 @@ public class ContentItemService {
         return repository.findBySourceAppAndSourceTypeAndExternalId(sourceApp, sourceType, externalId);
     }
 
+    // Este endpoint es público para cualquier usuario autenticado porque los frontends lo usan
+    // para "registrar" contenido descubierto en vivo (TMDB/Last.fm) la primera vez que alguien
+    // lo reseña. Por eso NO debe sobrescribir un registro existente con lo que mande el cliente
+    // (ver hallazgo S-05): si ya existe, se devuelve tal cual está. Editar contenido existente
+    // es una operación aparte, reservada a administradores.
     public ContentItem save(ContentItemRequest request) {
-        ContentItem item = repository.findBySourceAppAndSourceTypeAndExternalId(
+        return repository.findBySourceAppAndSourceTypeAndExternalId(
                 request.sourceApp(), request.sourceType(), request.externalId())
-            .map(existing -> {
-                existing.updateDetails(request.title(), request.description(), request.imageUrl(), request.releaseDate(), request.genre());
-                return existing;
-            })
-            .orElseGet(() -> new ContentItem(
+            .orElseGet(() -> repository.save(new ContentItem(
                 request.sourceApp(), request.sourceType(), request.externalId(), request.title(),
-                request.description(), request.imageUrl(), request.releaseDate(), request.genre()));
-
-        return repository.save(item);
+                request.description(), request.imageUrl(), request.releaseDate(), request.genre())));
     }
 
     public void deleteById(UUID id) {
