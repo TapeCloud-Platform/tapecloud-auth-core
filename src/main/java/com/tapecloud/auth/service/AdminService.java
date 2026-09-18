@@ -45,6 +45,7 @@ public class AdminService {
                 .orElseGet(() -> roleRepository.save(new Role("ROLE_ADMIN")));
 
         user.addRole(adminRole);
+        user.bumpTokenVersion();
         userRepository.save(user);
 
         return Map.of(
@@ -61,6 +62,7 @@ public class AdminService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
 
         user.getRoles().removeIf(role -> "ROLE_ADMIN".equals(role.getName()));
+        user.bumpTokenVersion();
         userRepository.save(user);
 
         return Map.of(

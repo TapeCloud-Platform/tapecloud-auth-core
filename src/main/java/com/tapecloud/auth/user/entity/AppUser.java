@@ -55,6 +55,13 @@ public class AppUser {
     @Column(columnDefinition = "TEXT")
     private String avatarDataUri;
 
+    // Se incrementa al cambiar la contraseña o los roles; los JWT emitidos antes
+    // de eso quedan invalidados porque su claim "tv" ya no coincide (ver JwtAuthenticationFilter).
+    // "default 0" es necesario para que ddl-auto=update pueda agregar la columna NOT NULL
+    // sobre una tabla "users" que ya tiene filas (si no, la migración falla en el arranque).
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int tokenVersion = 0;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "user_roles",
@@ -103,6 +110,8 @@ public class AppUser {
     public void setTotpSecret(String totpSecret) { this.totpSecret = totpSecret; }
     public String getAvatarDataUri() { return avatarDataUri; }
     public void setAvatarDataUri(String avatarDataUri) { this.avatarDataUri = avatarDataUri; }
+    public int getTokenVersion() { return tokenVersion; }
+    public void bumpTokenVersion() { this.tokenVersion++; }
     public Set<Role> getRoles() { return roles; }
     public void setRoles(Set<Role> roles) { this.roles = roles; }
     public void addRole(Role role) { this.roles.add(role); }
