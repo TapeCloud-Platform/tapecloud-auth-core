@@ -7,6 +7,7 @@ import com.tapecloud.auth.integration.lastfm.dto.LastfmChartResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmSearchResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmTopAlbumsResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmTrackInfoResponse;
+import java.net.URI;
 import java.util.function.UnaryOperator;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.annotation.Cacheable;
@@ -31,14 +32,13 @@ public class LastfmClient {
             throw new IllegalStateException("LASTFM_API_KEY no está configurada");
         }
 
-        String uri = UriComponentsBuilder.fromPath("/")
+        URI uri = baseBuilder()
                 .queryParam("method", "chart.gettoptracks")
-                .queryParam("api_key", properties.getApiKey())
-                .queryParam("format", "json")
                 .queryParam("page", page)
                 .queryParam("limit", limit)
+                .encode()
                 .build()
-                .toUriString();
+                .toUri();
 
         return restClient.get()
                 .uri(uri)
@@ -48,15 +48,13 @@ public class LastfmClient {
 
     // chart.gettoptracks solo devuelve la imagen placeholder; la portada real viene de track.getInfo.
     public LastfmTrackInfoResponse fetchTrackInfo(String artist, String track) {
-        String uri = UriComponentsBuilder.fromPath("/")
+        URI uri = baseBuilder()
                 .queryParam("method", "track.getInfo")
-                .queryParam("api_key", properties.getApiKey())
-                .queryParam("format", "json")
                 .queryParam("artist", artist)
                 .queryParam("track", track)
                 .encode()
                 .build()
-                .toUriString();
+                .toUri();
 
         return restClient.get()
                 .uri(uri)
@@ -86,13 +84,13 @@ public class LastfmClient {
     }
 
     public LastfmSearchResponse searchTracks(String query, int limit) {
-        String uri = baseBuilder()
+        URI uri = baseBuilder()
                 .queryParam("method", "track.search")
                 .queryParam("track", query)
                 .queryParam("limit", limit)
                 .encode()
                 .build()
-                .toUriString();
+                .toUri();
 
         return restClient.get().uri(uri).retrieve().body(LastfmSearchResponse.class);
     }
@@ -100,13 +98,13 @@ public class LastfmClient {
     public LastfmTopAlbumsResponse fetchArtistAlbums(String artist, int limit) {
         requireApiKey();
 
-        String uri = baseBuilder()
+        URI uri = baseBuilder()
                 .queryParam("method", "artist.getTopAlbums")
                 .queryParam("artist", artist)
                 .queryParam("limit", limit)
                 .encode()
                 .build()
-                .toUriString();
+                .toUri();
 
         return restClient.get().uri(uri).retrieve().body(LastfmTopAlbumsResponse.class);
     }
@@ -115,14 +113,14 @@ public class LastfmClient {
     public LastfmAlbumInfoResponse fetchAlbumInfo(String artist, String album) {
         requireApiKey();
 
-        String uri = baseBuilder()
+        URI uri = baseBuilder()
                 .queryParam("method", "album.getInfo")
                 .queryParam("artist", artist)
                 .queryParam("album", album)
                 .queryParam("autocorrect", 1)
                 .encode()
                 .build()
-                .toUriString();
+                .toUri();
 
         return restClient.get().uri(uri).retrieve().body(LastfmAlbumInfoResponse.class);
     }
@@ -131,13 +129,13 @@ public class LastfmClient {
     public LastfmArtistSearchResponse searchArtists(String query, int limit) {
         requireApiKey();
 
-        String uri = baseBuilder()
+        URI uri = baseBuilder()
                 .queryParam("method", "artist.search")
                 .queryParam("artist", query)
                 .queryParam("limit", limit)
                 .encode()
                 .build()
-                .toUriString();
+                .toUri();
 
         return restClient.get().uri(uri).retrieve().body(LastfmArtistSearchResponse.class);
     }
@@ -145,25 +143,29 @@ public class LastfmClient {
     public LastfmArtistInfoResponse fetchArtistInfo(String artist) {
         requireApiKey();
 
-        String uri = baseBuilder()
+        URI uri = baseBuilder()
                 .queryParam("method", "artist.getInfo")
                 .queryParam("artist", artist)
                 .queryParam("autocorrect", 1)
                 .encode()
                 .build()
-                .toUriString();
+                .toUri();
 
         return restClient.get().uri(uri).retrieve().body(LastfmArtistInfoResponse.class);
     }
 
     private LastfmChartResponse getChart(UnaryOperator<UriComponentsBuilder> customizer) {
         requireApiKey();
-        String uri = customizer.apply(baseBuilder()).encode().build().toUriString();
+        URI uri = customizer.apply(baseBuilder()).encode().build().toUri();
         return restClient.get().uri(uri).retrieve().body(LastfmChartResponse.class);
     }
 
+    // Se arma la URI absoluta a mano (con esquema y host) en vez de dejar que RestClient la resuelva
+    // contra baseUrl: eso evita depender de la resolución de plantilla de RestClient.uri(String),
+    // que re-codifica un string ya codificado (rompía artistas/álbumes con tildes o ñ).
     private UriComponentsBuilder baseBuilder() {
-        return UriComponentsBuilder.fromPath("/")
+        return UriComponentsBuilder.fromHttpUrl(properties.getBaseUrl())
+                .path("/")
                 .queryParam("api_key", properties.getApiKey())
                 .queryParam("format", "json");
     }
