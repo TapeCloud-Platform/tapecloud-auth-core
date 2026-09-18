@@ -10,6 +10,7 @@ public record DiscoveryProfile(
         String listeners,
         String playcount,
         List<String> tags,
-        List<String> similar
+        List<String> similar,
+        String url
 ) {
 }
