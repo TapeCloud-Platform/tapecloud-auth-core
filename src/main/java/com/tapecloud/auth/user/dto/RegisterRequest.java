@@ -16,7 +16,7 @@ public record RegisterRequest(
         String username,
 
         @NotBlank(message = "La contraseña es obligatoria")
-        @Size(min = 6, message = "La contraseña debe tener al menos 6 caracteres")
+        @Size(min = 10, message = "La contraseña debe tener al menos 10 caracteres")
         String password
 ) {
 }

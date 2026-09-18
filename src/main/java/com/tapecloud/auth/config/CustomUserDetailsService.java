@@ -30,6 +30,10 @@ public class CustomUserDetailsService implements UserDetailsService {
         return new User(
                 user.getEmail(),
                 user.getPassword(),
+                user.isEnabled(),
+                true,
+                true,
+                true,
                 user.getRoles().stream()
                         .map(Role::getName)
                         .map(SimpleGrantedAuthority::new)

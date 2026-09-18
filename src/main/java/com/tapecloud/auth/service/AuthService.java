@@ -2,6 +2,7 @@ package com.tapecloud.auth.service;
 
 import com.tapecloud.auth.config.JwtService;
 import com.tapecloud.auth.exception.TotpRequiredException;
+import com.tapecloud.auth.security.LoginRateLimiter;
 import com.tapecloud.auth.user.dto.AuthResponse;
 import com.tapecloud.auth.user.dto.ChangePasswordRequest;
 import com.tapecloud.auth.user.dto.LoginRequest;
@@ -43,6 +44,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final EmailService emailService;
     private final TotpService totpService;
+    private final LoginRateLimiter loginRateLimiter;
 
     @Value("${tapecloud.admin.emails:totosanchez2610@gmail.com,admin@tapecloud.com}")
     private String adminEmailsProperty;
@@ -53,7 +55,8 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             EmailService emailService,
-            TotpService totpService
+            TotpService totpService,
+            LoginRateLimiter loginRateLimiter
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -61,6 +64,7 @@ public class AuthService {
         this.jwtService = jwtService;
         this.emailService = emailService;
         this.totpService = totpService;
+        this.loginRateLimiter = loginRateLimiter;
     }
 
     @Transactional
@@ -156,13 +160,24 @@ public class AuthService {
 
 
     @Transactional(readOnly = true)
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String clientIp) {
         String identifier = request.identifier().trim();
+        loginRateLimiter.checkAllowed(identifier, clientIp);
+
         AppUser user = userRepository.findByEmailIgnoreCaseOrUsernameIgnoreCase(identifier, identifier)
-                .orElseThrow(() -> new IllegalArgumentException("Credenciales inválidas"));
+                .orElseGet(() -> {
+                    loginRateLimiter.recordFailure(identifier, clientIp);
+                    throw new IllegalArgumentException("Credenciales inválidas");
+                });
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            loginRateLimiter.recordFailure(identifier, clientIp);
             throw new IllegalArgumentException("Credenciales inválidas");
+        }
+
+        if (!user.isEnabled()) {
+            loginRateLimiter.recordFailure(identifier, clientIp);
+            throw new IllegalArgumentException("Esta cuenta está deshabilitada");
         }
 
         if (!user.isEmailVerified()) {
@@ -171,13 +186,16 @@ public class AuthService {
 
         if (user.isTotpEnabled()) {
             if (request.totpCode() == null || request.totpCode().isBlank()) {
+                // Todavía no cuenta como intento fallido: es el primer paso normal del flujo de 2FA.
                 throw new TotpRequiredException("Ingresá el código de tu app de autenticación");
             }
             if (!totpService.verifyCode(user.getTotpSecret(), request.totpCode().trim())) {
+                loginRateLimiter.recordFailure(identifier, clientIp);
                 throw new TotpRequiredException("El código de autenticación es incorrecto");
             }
         }
 
+        loginRateLimiter.recordSuccess(identifier, clientIp);
         return buildResponse(user);
     }
 
@@ -287,6 +305,7 @@ public class AuthService {
         }
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
+        user.bumpTokenVersion();
         userRepository.save(user);
     }
 
