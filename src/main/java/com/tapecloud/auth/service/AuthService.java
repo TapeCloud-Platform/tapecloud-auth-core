@@ -1,12 +1,16 @@
 package com.tapecloud.auth.service;
 
 import com.tapecloud.auth.config.JwtService;
+import com.tapecloud.auth.exception.TotpRequiredException;
 import com.tapecloud.auth.user.dto.AuthResponse;
 import com.tapecloud.auth.user.dto.ChangePasswordRequest;
 import com.tapecloud.auth.user.dto.LoginRequest;
 import com.tapecloud.auth.user.dto.RegisterRequest;
 import com.tapecloud.auth.user.dto.RegisterResponse;
 import com.tapecloud.auth.user.dto.ResendCodeRequest;
+import com.tapecloud.auth.user.dto.TotpDisableRequest;
+import com.tapecloud.auth.user.dto.TotpEnableRequest;
+import com.tapecloud.auth.user.dto.TotpSetupResponse;
 import com.tapecloud.auth.user.dto.UpdateUsernameRequest;
 import com.tapecloud.auth.user.dto.VerifyEmailRequest;
 import com.tapecloud.auth.user.entity.AppUser;
@@ -37,6 +41,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final EmailService emailService;
+    private final TotpService totpService;
 
     @Value("${tapecloud.admin.emails:totosanchez2610@gmail.com,admin@tapecloud.com}")
     private String adminEmailsProperty;
@@ -46,13 +51,15 @@ public class AuthService {
             RoleRepository roleRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
-            EmailService emailService
+            EmailService emailService,
+            TotpService totpService
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.emailService = emailService;
+        this.totpService = totpService;
     }
 
     @Transactional
@@ -161,7 +168,72 @@ public class AuthService {
             throw new IllegalArgumentException("Verificá tu email antes de iniciar sesión");
         }
 
+        if (user.isTotpEnabled()) {
+            if (request.totpCode() == null || request.totpCode().isBlank()) {
+                throw new TotpRequiredException("Ingresá el código de tu app de autenticación");
+            }
+            if (!totpService.verifyCode(user.getTotpSecret(), request.totpCode().trim())) {
+                throw new TotpRequiredException("El código de autenticación es incorrecto");
+            }
+        }
+
         return buildResponse(user);
+    }
+
+    @Transactional
+    public TotpSetupResponse setupTotp(String email) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (user.isTotpEnabled()) {
+            throw new IllegalArgumentException("La verificación en dos pasos ya está activada, desactivala primero para generar un nuevo código QR");
+        }
+
+        String secret = totpService.generateSecret();
+        user.setTotpSecret(secret);
+        userRepository.save(user);
+
+        return new TotpSetupResponse(secret, totpService.generateQrCodeDataUri(user.getEmail(), secret));
+    }
+
+    @Transactional
+    public void enableTotp(String email, TotpEnableRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (user.isTotpEnabled()) {
+            throw new IllegalArgumentException("La verificación en dos pasos ya está activada");
+        }
+        if (user.getTotpSecret() == null) {
+            throw new IllegalArgumentException("Primero generá un código QR");
+        }
+        if (!totpService.verifyCode(user.getTotpSecret(), request.code().trim())) {
+            throw new IllegalArgumentException("El código es incorrecto");
+        }
+
+        user.setTotpEnabled(true);
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void disableTotp(String email, TotpDisableRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            throw new IllegalArgumentException("La contraseña es incorrecta");
+        }
+
+        user.setTotpEnabled(false);
+        user.setTotpSecret(null);
+        userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isTotpEnabled(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(AppUser::isTotpEnabled)
+                .orElse(false);
     }
 
     private AuthResponse buildResponse(AppUser user) {

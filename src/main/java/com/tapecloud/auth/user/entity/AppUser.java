@@ -46,6 +46,12 @@ public class AppUser {
 
     private Instant verificationCodeExpiresAt;
 
+    @Column(nullable = false)
+    private boolean totpEnabled = false;
+
+    @Column(length = 64)
+    private String totpSecret;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "user_roles",
@@ -88,6 +94,10 @@ public class AppUser {
     public void setVerificationCode(String verificationCode) { this.verificationCode = verificationCode; }
     public Instant getVerificationCodeExpiresAt() { return verificationCodeExpiresAt; }
     public void setVerificationCodeExpiresAt(Instant verificationCodeExpiresAt) { this.verificationCodeExpiresAt = verificationCodeExpiresAt; }
+    public boolean isTotpEnabled() { return totpEnabled; }
+    public void setTotpEnabled(boolean totpEnabled) { this.totpEnabled = totpEnabled; }
+    public String getTotpSecret() { return totpSecret; }
+    public void setTotpSecret(String totpSecret) { this.totpSecret = totpSecret; }
     public Set<Role> getRoles() { return roles; }
     public void setRoles(Set<Role> roles) { this.roles = roles; }
     public void addRole(Role role) { this.roles.add(role); }
