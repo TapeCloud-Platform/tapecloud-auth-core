@@ -33,9 +33,9 @@ public class CommentService {
     }
 
     @Transactional(readOnly = true)
-    public List<CommentResponse> findByReview(UUID reviewId) {
+    public List<CommentResponse> findByReview(UUID reviewId, String currentUserEmail) {
         return commentRepository.findByReviewIdOrderByCreatedAtAsc(reviewId).stream()
-                .map(this::toResponse)
+                .map(comment -> toResponse(comment, currentUserEmail))
                 .toList();
     }
 
@@ -56,7 +56,7 @@ public class CommentService {
                 request.body().trim()
         );
 
-        return toResponse(commentRepository.save(comment));
+        return toResponse(commentRepository.save(comment), userEmail);
     }
 
     @Transactional
@@ -71,12 +71,16 @@ public class CommentService {
         commentRepository.delete(comment);
     }
 
-    private CommentResponse toResponse(Comment comment) {
+    private CommentResponse toResponse(Comment comment, String currentUserEmail) {
+        boolean ownedByCurrentUser = currentUserEmail != null &&
+                !currentUserEmail.isBlank() &&
+                comment.getAuthorEmail().equalsIgnoreCase(currentUserEmail);
+
         return new CommentResponse(
                 comment.getId(),
                 comment.getReview().getId(),
-                comment.getAuthorEmail(),
                 comment.getAuthorDisplayName(),
+                ownedByCurrentUser,
                 comment.getBody(),
                 comment.getCreatedAt()
         );

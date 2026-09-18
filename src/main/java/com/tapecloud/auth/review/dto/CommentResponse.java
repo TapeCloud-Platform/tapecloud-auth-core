@@ -6,8 +6,8 @@ import java.util.UUID;
 public record CommentResponse(
         UUID id,
         UUID reviewId,
-        String authorEmail,
         String authorDisplayName,
+        boolean ownedByCurrentUser,
         String body,
         Instant createdAt
 ) {
