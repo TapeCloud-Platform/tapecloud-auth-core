@@ -7,6 +7,7 @@ public record AuthResponse(
         String email,
         String username,
         String displayName,
-        List<String> roles
+        List<String> roles,
+        String avatarDataUri
 ) {
 }

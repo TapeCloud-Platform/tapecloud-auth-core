@@ -11,6 +11,7 @@ import com.tapecloud.auth.user.dto.ResendCodeRequest;
 import com.tapecloud.auth.user.dto.TotpDisableRequest;
 import com.tapecloud.auth.user.dto.TotpEnableRequest;
 import com.tapecloud.auth.user.dto.TotpSetupResponse;
+import com.tapecloud.auth.user.dto.UpdateAvatarRequest;
 import com.tapecloud.auth.user.dto.UpdateUsernameRequest;
 import com.tapecloud.auth.user.dto.VerifyEmailRequest;
 import com.tapecloud.auth.user.entity.AppUser;
@@ -239,7 +240,7 @@ public class AuthService {
     private AuthResponse buildResponse(AppUser user) {
         String token = jwtService.generateToken(user);
         List<String> roles = user.getRoles().stream().map(Role::getName).toList();
-        return new AuthResponse(token, user.getEmail(), user.getUsername(), user.getDisplayName(), roles);
+        return new AuthResponse(token, user.getEmail(), user.getUsername(), user.getDisplayName(), roles, user.getAvatarDataUri());
     }
 
     @Transactional
@@ -262,6 +263,21 @@ public class AuthService {
     }
 
     @Transactional
+    public AuthResponse updateAvatar(String email, UpdateAvatarRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        String avatarDataUri = request.avatarDataUri();
+        if (avatarDataUri != null && !avatarDataUri.isBlank() && !avatarDataUri.startsWith("data:image/")) {
+            throw new IllegalArgumentException("La imagen no es válida");
+        }
+
+        user.setAvatarDataUri(avatarDataUri == null || avatarDataUri.isBlank() ? null : avatarDataUri);
+        userRepository.save(user);
+        return buildResponse(user);
+    }
+
+    @Transactional
     public void changePassword(String email, ChangePasswordRequest request) {
         AppUser user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
@@ -279,5 +295,12 @@ public class AuthService {
             return List.of();
         }
         return authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public String getAvatarDataUri(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(AppUser::getAvatarDataUri)
+                .orElse(null);
     }
 }
