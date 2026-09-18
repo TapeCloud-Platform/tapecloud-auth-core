@@ -6,6 +6,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
@@ -18,16 +19,29 @@ import org.springframework.stereotype.Service;
 @Service
 public class JwtService {
 
-    @Value("${jwt.secret:change-me-in-production}")
+    private static final int MIN_SECRET_BYTES = 32; // 256 bits, mínimo recomendado para HS256.
+
+    @Value("${jwt.secret}")
     private String secret;
 
     @Value("${jwt.expiration-ms:86400000}")
     private long expirationMs;
 
+    @PostConstruct
+    void validateSecret() {
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "JWT_SECRET falta o es demasiado corto: se requieren al menos " + MIN_SECRET_BYTES
+                            + " bytes (256 bits) de un valor aleatorio. No hay valor por defecto por seguridad."
+            );
+        }
+    }
+
     public String generateToken(AppUser user) {
         Map<String, Object> claims = new HashMap<>();
         List<String> roles = user.getRoles().stream().map(Role::getName).toList();
         claims.put("roles", roles);
+        claims.put("tv", user.getTokenVersion());
 
         return Jwts.builder()
                 .setClaims(claims)
@@ -42,12 +56,13 @@ public class JwtService {
         return extractAllClaims(token).getSubject();
     }
 
-    public List<String> extractRoles(String token) {
-        Object roles = extractAllClaims(token).get("roles");
-        if (roles instanceof List<?> roleList) {
-            return roleList.stream().map(String::valueOf).toList();
+    /** Los tokens emitidos antes de agregar este claim no lo tienen: se tratan como versión 0. */
+    public int extractTokenVersion(String token) {
+        Object tv = extractAllClaims(token).get("tv");
+        if (tv instanceof Number number) {
+            return number.intValue();
         }
-        return List.of();
+        return 0;
     }
 
     public boolean isTokenValid(String token) {
