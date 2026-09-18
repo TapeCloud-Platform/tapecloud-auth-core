@@ -2,6 +2,7 @@ package com.tapecloud.auth.review.api;
 
 import com.tapecloud.auth.review.dto.ReviewRequest;
 import com.tapecloud.auth.review.dto.ReviewResponse;
+import com.tapecloud.auth.review.dto.ReviewStatsResponse;
 import com.tapecloud.auth.review.service.ReviewService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -43,6 +44,11 @@ public class ReviewController {
             return reviewService.findBySourceApp(sourceApp, currentUserEmail);
         }
         return reviewService.findBySourceApp("tapeflix", currentUserEmail);
+    }
+
+    @GetMapping("/me/stats")
+    public ReviewStatsResponse myStats(Authentication authentication) {
+        return reviewService.getMyStats(authentication.getName());
     }
 
     @PostMapping("/content/{contentId}")
