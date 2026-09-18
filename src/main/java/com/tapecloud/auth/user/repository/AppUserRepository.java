@@ -22,4 +22,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
     // El login acepta email o username: se busca por cualquiera de los dos.
     @EntityGraph(attributePaths = "roles")
     Optional<AppUser> findByEmailIgnoreCaseOrUsernameIgnoreCase(String email, String username);
+
+    @Query("select count(u) > 0 from AppUser u join u.roles r where r.name = ?1")
+    boolean existsByRoleName(String roleName);
 }
