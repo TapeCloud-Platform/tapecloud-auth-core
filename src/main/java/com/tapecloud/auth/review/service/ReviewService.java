@@ -64,6 +64,10 @@ public class ReviewService {
         AppUser user = userRepository.findByEmailIgnoreCase(userEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
 
+        if (reviewRepository.existsByContentIdAndAuthorEmailIgnoreCase(contentId, user.getEmail())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya publicaste una reseña para este contenido");
+        }
+
         String displayName = user.getDisplayName() != null ? user.getDisplayName() : user.getEmail().split("@")[0];
 
         Review review = new Review(
