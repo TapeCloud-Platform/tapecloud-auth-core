@@ -22,12 +22,16 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
 public class LastfmDiscoveryProvider implements DiscoveryProvider {
+
+    private static final Logger log = LoggerFactory.getLogger(LastfmDiscoveryProvider.class);
 
     private static final int ARTIST_MATCH_LIMIT = 6;
     private static final int ARTIST_SEARCH_POOL = 20;
@@ -219,7 +223,8 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
                 info.stats() != null ? orZero(info.stats().playcount()) : "0",
                 names(info.tags() != null ? info.tags().tag() : null, LastfmArtistInfoResponse.Tag::name),
                 names(info.similar() != null ? info.similar().artist() : null,
-                        LastfmArtistInfoResponse.SimilarArtist::name)
+                        LastfmArtistInfoResponse.SimilarArtist::name),
+                info.url()
         );
     }
 
@@ -240,6 +245,19 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
         }
 
         String fallbackImage = LastfmImages.largest(info.track().album().image());
+        return buildAlbumDetail(artist, albumName, fallbackImage, info.track().durationSeconds());
+    }
+
+    /**
+     * Ficha de un álbum en sí (sin pasar por un track): se usa cuando se navega directo
+     * desde el nombre del álbum, ej. en la ficha de una canción.
+     */
+    @Override
+    public DiscoveryTrackDetail albumDetail(String artist, String album) {
+        return buildAlbumDetail(artist, album, null, 0);
+    }
+
+    private DiscoveryTrackDetail buildAlbumDetail(String artist, String albumName, String fallbackImage, int durationSeconds) {
         try {
             // La wiki y el tracklist dependen de qué tan documentado esté el álbum en
             // Last.fm: para discos muy conocidos vienen completos, para compilados o
@@ -253,10 +271,14 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
                     albumName,
                     imageUrl,
                     albumInfo != null ? albumInfo.summary() : null,
-                    albumInfo != null ? albumInfo.trackCount() : 0);
+                    albumInfo != null ? albumInfo.trackCount() : 0,
+                    albumInfo != null ? albumInfo.trackNames() : List.of(),
+                    durationSeconds);
         } catch (Exception e) {
-            // El álbum existe según track.getInfo pero album.getInfo no lo reconoce (título ambiguo).
-            return new DiscoveryTrackDetail(albumName, fallbackImage, null, 0);
+            // El álbum existe según track.getInfo pero album.getInfo no lo reconoce (título ambiguo),
+            // o la respuesta trae un campo con una forma que el DTO no puede parsear.
+            log.warn("No se pudo obtener album.getInfo para artist='{}' album='{}': {}", artist, albumName, e.toString());
+            return new DiscoveryTrackDetail(albumName, fallbackImage, null, 0, List.of(), durationSeconds);
         }
     }
 

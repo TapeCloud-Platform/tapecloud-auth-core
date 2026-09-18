@@ -30,10 +30,15 @@ public record LastfmAlbumInfoResponse(
 
     /** Un single publicado como "álbum" trae una sola pista; los discos reales traen varias. */
     public int trackCount() {
+        return trackNames().size();
+    }
+
+    /** Nombres de las canciones del álbum en el orden que devuelve Last.fm. */
+    public List<String> trackNames() {
         if (album == null || album.tracks() == null || album.tracks().track() == null) {
-            return 0;
+            return List.of();
         }
-        return album.tracks().track().size();
+        return album.tracks().track().stream().map(AlbumTrack::name).toList();
     }
 
     public String imageUrl() {
