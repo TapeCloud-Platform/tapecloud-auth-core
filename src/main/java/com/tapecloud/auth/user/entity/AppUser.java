@@ -52,6 +52,9 @@ public class AppUser {
     @Column(length = 64)
     private String totpSecret;
 
+    @Column(columnDefinition = "TEXT")
+    private String avatarDataUri;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "user_roles",
@@ -98,6 +101,8 @@ public class AppUser {
     public void setTotpEnabled(boolean totpEnabled) { this.totpEnabled = totpEnabled; }
     public String getTotpSecret() { return totpSecret; }
     public void setTotpSecret(String totpSecret) { this.totpSecret = totpSecret; }
+    public String getAvatarDataUri() { return avatarDataUri; }
+    public void setAvatarDataUri(String avatarDataUri) { this.avatarDataUri = avatarDataUri; }
     public Set<Role> getRoles() { return roles; }
     public void setRoles(Set<Role> roles) { this.roles = roles; }
     public void addRole(Role role) { this.roles.add(role); }

@@ -10,9 +10,11 @@ import com.tapecloud.auth.user.dto.ResendCodeRequest;
 import com.tapecloud.auth.user.dto.TotpDisableRequest;
 import com.tapecloud.auth.user.dto.TotpEnableRequest;
 import com.tapecloud.auth.user.dto.TotpSetupResponse;
+import com.tapecloud.auth.user.dto.UpdateAvatarRequest;
 import com.tapecloud.auth.user.dto.UpdateUsernameRequest;
 import com.tapecloud.auth.user.dto.VerifyEmailRequest;
 import jakarta.validation.Valid;
+import java.util.HashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -57,11 +59,20 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<Map<String, Object>> me(Authentication authentication) {
-        return ResponseEntity.ok(Map.of(
-                "email", authentication.getName(),
-                "roles", authService.currentUserRoles(authentication),
-                "totpEnabled", authService.isTotpEnabled(authentication.getName())
-        ));
+        Map<String, Object> body = new HashMap<>();
+        body.put("email", authentication.getName());
+        body.put("roles", authService.currentUserRoles(authentication));
+        body.put("totpEnabled", authService.isTotpEnabled(authentication.getName()));
+        body.put("avatarDataUri", authService.getAvatarDataUri(authentication.getName()));
+        return ResponseEntity.ok(body);
+    }
+
+    @PatchMapping("/me/avatar")
+    public ResponseEntity<AuthResponse> updateAvatar(
+            Authentication authentication,
+            @Valid @RequestBody UpdateAvatarRequest request
+    ) {
+        return ResponseEntity.ok(authService.updateAvatar(authentication.getName(), request));
     }
 
     @PostMapping("/2fa/setup")
