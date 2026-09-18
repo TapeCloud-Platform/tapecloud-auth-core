@@ -15,9 +15,5 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     boolean existsByContentIdAndAuthorEmailIgnoreCase(UUID contentId, String authorEmail);
 
-    long countByContentSourceApp(String sourceApp);
-
-    long countByAuthorEmail(String authorEmail);
-
     long countByAuthorEmailAndContentSourceApp(String authorEmail, String sourceApp);
 }
