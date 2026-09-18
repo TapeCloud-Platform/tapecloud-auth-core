@@ -30,8 +30,9 @@ public class CommentController {
     }
 
     @GetMapping
-    public List<CommentResponse> list(@RequestParam UUID reviewId) {
-        return commentService.findByReview(reviewId);
+    public List<CommentResponse> list(@RequestParam UUID reviewId, Authentication authentication) {
+        String currentUserEmail = (authentication != null) ? authentication.getName() : null;
+        return commentService.findByReview(reviewId, currentUserEmail);
     }
 
     @PostMapping("/review/{reviewId}")

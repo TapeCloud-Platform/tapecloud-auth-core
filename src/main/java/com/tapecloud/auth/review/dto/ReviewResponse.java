@@ -7,7 +7,6 @@ public record ReviewResponse(
         UUID id,
         UUID contentId,
         String contentTitle,
-        String authorEmail,
         String authorDisplayName,
         String title,
         String body,
@@ -15,6 +14,7 @@ public record ReviewResponse(
         long likesCount,
         long commentsCount,
         boolean likedByCurrentUser,
+        boolean ownedByCurrentUser,
         Instant createdAt
 ) {
 }

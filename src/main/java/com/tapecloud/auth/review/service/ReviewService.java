@@ -141,11 +141,14 @@ public class ReviewService {
                 !currentUserEmail.isBlank() &&
                 reviewLikeRepository.existsByReviewIdAndUserEmailIgnoreCase(review.getId(), currentUserEmail);
 
+        boolean ownedByCurrentUser = currentUserEmail != null &&
+                !currentUserEmail.isBlank() &&
+                review.getAuthorEmail().equalsIgnoreCase(currentUserEmail);
+
         return new ReviewResponse(
                 review.getId(),
                 review.getContent().getId(),
                 review.getContent().getTitle(),
-                review.getAuthorEmail(),
                 review.getAuthorDisplayName(),
                 review.getTitle(),
                 review.getBody(),
@@ -153,6 +156,7 @@ public class ReviewService {
                 likesCount,
                 commentsCount,
                 likedByCurrentUser,
+                ownedByCurrentUser,
                 review.getCreatedAt()
         );
     }
