@@ -1,5 +1,6 @@
 package com.tapecloud.auth.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tapecloud.auth.user.entity.AppUser;
 import com.tapecloud.auth.user.entity.Role;
 import com.tapecloud.auth.user.repository.AppUserRepository;
@@ -8,6 +9,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -18,6 +20,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final JwtService jwtService;
     private final AppUserRepository userRepository;
@@ -42,7 +46,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String jwt = authHeader.substring(7);
         if (!jwtService.isTokenValid(jwt)) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            rejectWithMessage(response, "El token expiró o no es válido. Iniciá sesión de nuevo.");
             return;
         }
 
@@ -53,13 +57,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // contraseña o una revocación de rol invalidan sesiones existentes de inmediato.
             Optional<AppUser> maybeUser = userRepository.findByEmailIgnoreCase(userEmail);
             if (maybeUser.isEmpty()) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                rejectWithMessage(response, "El token expiró o no es válido. Iniciá sesión de nuevo.");
                 return;
             }
 
             AppUser user = maybeUser.get();
-            if (!user.isEnabled() || user.getTokenVersion() != jwtService.extractTokenVersion(jwt)) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            if (!user.isEnabled()) {
+                rejectWithMessage(response, "Esta cuenta está deshabilitada.");
+                return;
+            }
+            if (user.getTokenVersion() != jwtService.extractTokenVersion(jwt)) {
+                rejectWithMessage(response, "Tu sesión ya no es válida (se cambió la contraseña o los permisos). Iniciá sesión de nuevo.");
                 return;
             }
 
@@ -72,5 +80,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void rejectWithMessage(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write(OBJECT_MAPPER.writeValueAsString(Map.of("message", message)));
     }
 }
