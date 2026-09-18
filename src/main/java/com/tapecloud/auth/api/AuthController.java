@@ -1,5 +1,6 @@
 package com.tapecloud.auth.api;
 
+import com.tapecloud.auth.security.RegisterRateLimiter;
 import com.tapecloud.auth.service.AuthService;
 import com.tapecloud.auth.user.dto.AuthResponse;
 import com.tapecloud.auth.user.dto.ChangePasswordRequest;
@@ -13,6 +14,7 @@ import com.tapecloud.auth.user.dto.TotpSetupResponse;
 import com.tapecloud.auth.user.dto.UpdateAvatarRequest;
 import com.tapecloud.auth.user.dto.UpdateUsernameRequest;
 import com.tapecloud.auth.user.dto.VerifyEmailRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,13 +33,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final RegisterRateLimiter registerRateLimiter;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, RegisterRateLimiter registerRateLimiter) {
         this.authService = authService;
+        this.registerRateLimiter = registerRateLimiter;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<RegisterResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<RegisterResponse> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        String clientIp = httpRequest.getRemoteAddr();
+        registerRateLimiter.checkAllowed(clientIp);
+        registerRateLimiter.recordAttempt(clientIp);
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
     }
 
@@ -53,8 +63,11 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<AuthResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        return ResponseEntity.ok(authService.login(request, httpRequest.getRemoteAddr()));
     }
 
     @GetMapping("/me")
