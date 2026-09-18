@@ -29,18 +29,6 @@ public class TotpService {
         return secretGenerator.generate();
     }
 
-    public String buildOtpAuthUrl(String email, String secret) {
-        QrData data = new QrData.Builder()
-                .label(email)
-                .secret(secret)
-                .issuer(issuer)
-                .algorithm(HashingAlgorithm.SHA1)
-                .digits(6)
-                .period(30)
-                .build();
-        return data.getUri();
-    }
-
     public String generateQrCodeDataUri(String email, String secret) {
         QrData data = new QrData.Builder()
                 .label(email)
