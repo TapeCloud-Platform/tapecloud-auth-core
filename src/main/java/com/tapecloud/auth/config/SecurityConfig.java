@@ -38,7 +38,12 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/health", "/api/auth/register", "/api/auth/login").permitAll()
+                        // Sin este permitAll, cualquier respuesta de error (4xx/5xx) que dispare un
+                        // forward interno a /error queda bloqueada por Security y el cliente recibe
+                        // un 403 vacío en vez del código/mensaje real (404, 409, etc).
+                        .requestMatchers("/error").permitAll()
+                        .requestMatchers("/api/health", "/api/auth/register", "/api/auth/login",
+                                "/api/auth/verify-email", "/api/auth/resend-code").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/content/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/discover/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/content/sync/tmdb/**").permitAll()
