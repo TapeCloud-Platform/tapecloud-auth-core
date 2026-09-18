@@ -225,7 +225,7 @@ jwt.secret=tapecloud-secret-key-change-production
 jwt.expiration=86400000
 
 # TMDB API
-TMDB_API_KEY=a84f35dc44a41efc9abc4c589872c0eb
+TMDB_API_KEY=your-tmdb-api-key-here
 ```
 
 ---
