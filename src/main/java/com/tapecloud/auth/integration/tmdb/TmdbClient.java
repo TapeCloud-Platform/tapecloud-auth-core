@@ -3,6 +3,7 @@ package com.tapecloud.auth.integration.tmdb;
 import com.tapecloud.auth.integration.tmdb.dto.TmdbGenreListResponse;
 import com.tapecloud.auth.integration.tmdb.dto.TmdbMoviePageResponse;
 import com.tapecloud.auth.integration.tmdb.dto.TmdbPersonSearchResponse;
+import java.net.URI;
 import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -65,9 +66,7 @@ public class TmdbClient {
     public TmdbMoviePageResponse discoverMovies(String extraParam, String extraValue, int page) {
         requireApiKey();
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/discover/movie")
-                .queryParam("api_key", properties.getApiKey())
-                .queryParam("language", properties.getLanguage())
+        UriComponentsBuilder builder = baseBuilder("/discover/movie")
                 .queryParam("sort_by", "popularity.desc")
                 .queryParam("page", page);
 
@@ -76,7 +75,7 @@ public class TmdbClient {
         }
 
         return restClient.get()
-                .uri(builder.encode().build().toUriString())
+                .uri(builder.encode().build().toUri())
                 .retrieve()
                 .body(TmdbMoviePageResponse.class);
     }
@@ -84,14 +83,12 @@ public class TmdbClient {
     public TmdbMoviePageResponse searchMovies(String query, int page) {
         requireApiKey();
 
-        String uri = UriComponentsBuilder.fromPath("/search/movie")
-                .queryParam("api_key", properties.getApiKey())
-                .queryParam("language", properties.getLanguage())
+        URI uri = baseBuilder("/search/movie")
                 .queryParam("query", query)
                 .queryParam("page", page)
                 .encode()
                 .build()
-                .toUriString();
+                .toUri();
 
         return restClient.get().uri(uri).retrieve().body(TmdbMoviePageResponse.class);
     }
@@ -99,15 +96,22 @@ public class TmdbClient {
     public TmdbPersonSearchResponse searchPerson(String query) {
         requireApiKey();
 
-        String uri = UriComponentsBuilder.fromPath("/search/person")
-                .queryParam("api_key", properties.getApiKey())
-                .queryParam("language", properties.getLanguage())
+        URI uri = baseBuilder("/search/person")
                 .queryParam("query", query)
                 .encode()
                 .build()
-                .toUriString();
+                .toUri();
 
         return restClient.get().uri(uri).retrieve().body(TmdbPersonSearchResponse.class);
+    }
+
+    // URI absoluta armada a mano (con esquema y host): RestClient.uri(String) re-codifica un string
+    // ya codificado, lo que rompía búsquedas con tildes o ñ. Con RestClient.uri(URI) no vuelve a tocarla.
+    private UriComponentsBuilder baseBuilder(String path) {
+        return UriComponentsBuilder.fromHttpUrl(properties.getBaseUrl())
+                .path(path)
+                .queryParam("api_key", properties.getApiKey())
+                .queryParam("language", properties.getLanguage());
     }
 
     private void requireApiKey() {
