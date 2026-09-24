@@ -24,7 +24,7 @@ public class JwtService {
     @Value("${jwt.secret}")
     private String secret;
 
-    @Value("${jwt.expiration-ms:86400000}")
+    @Value("${jwt.expiration-ms:28800000}")
     private long expirationMs;
 
     @PostConstruct
@@ -33,6 +33,12 @@ public class JwtService {
             throw new IllegalStateException(
                     "JWT_SECRET falta o es demasiado corto: se requieren al menos " + MIN_SECRET_BYTES
                             + " bytes (256 bits) de un valor aleatorio. No hay valor por defecto por seguridad."
+            );
+        }
+        String lower = secret.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("change-me") || lower.contains("change-in-production") || lower.contains("your-secret-key") || lower.contains("please-use")) {
+            throw new IllegalStateException(
+                    "JWT_SECRET usa un valor de ejemplo/placeholder: generá uno aleatorio con `openssl rand -base64 48` y no uses el de .env.example"
             );
         }
     }

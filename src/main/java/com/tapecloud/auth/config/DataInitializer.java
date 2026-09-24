@@ -59,6 +59,11 @@ public class DataInitializer implements CommandLineRunner {
                     + "manualmente en la base.");
             return;
         }
+        if (bootstrapPassword.trim().length() < 12) {
+            log.warn("ADMIN_BOOTSTRAP_PASSWORD tiene menos de 12 caracteres: no se crea ningún admin. "
+                    + "Usá una contraseña más larga.");
+            return;
+        }
         if (userRepository.existsByEmailIgnoreCase(bootstrapEmail)) {
             log.warn("ADMIN_BOOTSTRAP_EMAIL ya existe como usuario sin ROLE_ADMIN; no se modifica automáticamente. "
                     + "Usá /api/admin/users/{id}/grant-admin con una cuenta admin existente.");

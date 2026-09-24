@@ -34,16 +34,18 @@ public class ReviewController {
     public List<ReviewResponse> list(
             @RequestParam(required = false) String sourceApp,
             @RequestParam(required = false) UUID contentId,
+            @RequestParam(defaultValue = "50") int limit,
             Authentication authentication
     ) {
+        int max = Math.min(Math.max(limit, 1), 100);
         String currentUserEmail = (authentication != null) ? authentication.getName() : null;
         if (contentId != null) {
-            return reviewService.findByContent(contentId, currentUserEmail);
+            return reviewService.findByContent(contentId, currentUserEmail).stream().limit(max).toList();
         }
         if (sourceApp != null && !sourceApp.isBlank()) {
-            return reviewService.findBySourceApp(sourceApp, currentUserEmail);
+            return reviewService.findBySourceApp(sourceApp, currentUserEmail).stream().limit(max).toList();
         }
-        return reviewService.findBySourceApp("tapeflix", currentUserEmail);
+        return reviewService.findBySourceApp("tapeflix", currentUserEmail).stream().limit(max).toList();
     }
 
     @GetMapping("/me/stats")

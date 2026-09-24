@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+data/
+target/
+.git/
+.gitignore
+.mvn/
+mvnw
+mvnw.cmd

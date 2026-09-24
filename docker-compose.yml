@@ -2,7 +2,7 @@ services:
   # Backend - Java/Spring Boot
   backend:
     build:
-      context: ./tapecloud-auth-core
+      context: .
       dockerfile: Dockerfile.dev
     ports:
       - "8080:8080"
@@ -33,11 +33,11 @@ services:
       - LASTFM_API_KEY=${LASTFM_API_KEY}
       - LASTFM_BASE_URL=${LASTFM_BASE_URL}
     volumes:
-      - ./tapecloud-auth-core/data:/workspace/data
+      - ./data:/workspace/data
     develop:
       watch:
         - action: rebuild
-          path: ./tapecloud-auth-core
+          path: .
           ignore:
             - .git/
             - data/
@@ -51,7 +51,7 @@ services:
   # Portal - React/Vite
   portal:
     build:
-      context: ./tapecloud-portal
+      context: ../tapecloud-portal
       dockerfile: Dockerfile.dev
     ports:
       - "5173:5173"
@@ -60,11 +60,11 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./tapecloud-portal/src
+          path: ../tapecloud-portal/src
           target: /app/src
           initial_sync: true
         - action: rebuild
-          path: ./tapecloud-portal
+          path: ../tapecloud-portal
           ignore:
             - src/
             - node_modules/
@@ -80,7 +80,7 @@ services:
   # TapeFlix - React/Vite
   tapeflix:
     build:
-      context: ./tapeflix-app
+      context: ../tapeflix-app
       dockerfile: Dockerfile.dev
     ports:
       - "5174:5174"
@@ -89,11 +89,11 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./tapeflix-app/src
+          path: ../tapeflix-app/src
           target: /app/src
           initial_sync: true
         - action: rebuild
-          path: ./tapeflix-app
+          path: ../tapeflix-app
           ignore:
             - src/
             - node_modules/
@@ -109,7 +109,7 @@ services:
   # TapeBeat - React/Vite
   tapebeat:
     build:
-      context: ./tapebeat-app
+      context: ../tapebeat-app
       dockerfile: Dockerfile.dev
     ports:
       - "5175:5175"
@@ -118,11 +118,11 @@ services:
     develop:
       watch:
         - action: sync
-          path: ./tapebeat-app/src
+          path: ../tapebeat-app/src
           target: /app/src
           initial_sync: true
         - action: rebuild
-          path: ./tapebeat-app
+          path: ../tapebeat-app
           ignore:
             - src/
             - node_modules/

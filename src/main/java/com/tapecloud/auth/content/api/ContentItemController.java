@@ -34,8 +34,10 @@ public class ContentItemController {
     @GetMapping
     public List<ContentItem> find(
             @RequestParam(required = false) String sourceApp,
-            @RequestParam(required = false) String sourceType) {
-        return service.find(sourceApp, sourceType);
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(defaultValue = "100") int limit) {
+        int max = Math.min(Math.max(limit, 1), 200);
+        return service.find(sourceApp, sourceType).stream().limit(max).toList();
     }
 
     @GetMapping("/paginated")
@@ -45,7 +47,9 @@ public class ContentItemController {
             @RequestParam(required = false) String genre,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int limit) {
-        return service.findPaginated(sourceApp, sourceType, genre, PageRequest.of(page, limit));
+        int safePage = Math.max(page, 0);
+        int safeLimit = Math.min(Math.max(limit, 1), 50);
+        return service.findPaginated(sourceApp, sourceType, genre, PageRequest.of(safePage, safeLimit));
     }
 
     // 204 en vez de 404: la ausencia es un resultado válido y así el navegador no la registra como error.

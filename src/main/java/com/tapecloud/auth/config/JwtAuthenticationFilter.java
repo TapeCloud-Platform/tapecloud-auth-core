@@ -37,14 +37,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
+        String jwt = null;
         final String authHeader = request.getHeader("Authorization");
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwt = authHeader.substring(7);
+        } else if (request.getCookies() != null) {
+            for (jakarta.servlet.http.Cookie c : request.getCookies()) {
+                if ("tapecloud_token".equals(c.getName()) && c.getValue() != null && !c.getValue().isBlank()) {
+                    jwt = c.getValue();
+                    break;
+                }
+            }
+        }
+        if (jwt == null || jwt.isBlank()) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        String jwt = authHeader.substring(7);
         if (!jwtService.isTokenValid(jwt)) {
             rejectWithMessage(response, "El token expiró o no es válido. Iniciá sesión de nuevo.");
             return;

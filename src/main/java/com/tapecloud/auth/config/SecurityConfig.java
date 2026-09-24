@@ -1,6 +1,8 @@
 package com.tapecloud.auth.config;
 
+import java.util.Arrays;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -26,6 +28,10 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomUserDetailsService customUserDetailsService;
 
+    // Orígenes extra para prod, separados por coma. Vacío = solo patrones de desarrollo local.
+    @Value("${app.cors.allowed-origins:}")
+    private String allowedOrigins;
+
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, CustomUserDetailsService customUserDetailsService) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.customUserDetailsService = customUserDetailsService;
@@ -36,6 +42,10 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .headers(h -> {
+                    h.frameOptions(f -> f.deny());
+                    h.contentTypeOptions(c -> {});
+                })
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Sin este permitAll, cualquier respuesta de error (4xx/5xx) que dispare un
@@ -80,17 +90,24 @@ public class SecurityConfig {
 
     // Permite a los frontends locales (portal, TapeFlix, TapeBeat) consumir la API mientras se desarrolla,
     // incluyendo acceso vía IP de red local (Vite expone ambas URLs).
+    // En prod se suman los orígenes de CORS_ALLOWED_ORIGINS (ver application.properties).
     private CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of(
+        // Solo loopback por defecto; red local o prod vía CORS_ALLOWED_ORIGINS.
+        List<String> patterns = new java.util.ArrayList<>(List.of(
                 "http://localhost:*",
-                "http://127.0.0.1:*",
-                "http://172.*:*",
-                "http://192.168.*:*",
-                "http://10.*:*"
+                "http://127.0.0.1:*"
         ));
+        if (allowedOrigins != null && !allowedOrigins.isBlank()) {
+            Arrays.stream(allowedOrigins.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .forEach(patterns::add);
+        }
+        configuration.setAllowedOriginPatterns(patterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", configuration);

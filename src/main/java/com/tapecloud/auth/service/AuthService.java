@@ -46,7 +46,7 @@ public class AuthService {
     private final TotpService totpService;
     private final LoginRateLimiter loginRateLimiter;
 
-    @Value("${tapecloud.admin.emails:totosanchez2610@gmail.com,admin@tapecloud.com}")
+    @Value("${tapecloud.admin.emails:}")
     private String adminEmailsProperty;
 
     public AuthService(
@@ -72,11 +72,10 @@ public class AuthService {
         String normalizedEmail = request.email().trim();
         String normalizedUsername = request.username().trim();
 
-        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-            throw new IllegalArgumentException("Ya existe un usuario con ese email");
-        }
-        if (userRepository.existsByUsernameIgnoreCase(normalizedUsername)) {
-            throw new IllegalArgumentException("Ese nombre de usuario ya está en uso");
+        // Mensaje único para email o username en uso: no revelar cuál está registrado.
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)
+                || userRepository.existsByUsernameIgnoreCase(normalizedUsername)) {
+            throw new IllegalArgumentException("No se pudo completar el registro con esos datos");
         }
 
         Role defaultRole = roleRepository.findByName("ROLE_USER")
@@ -112,17 +111,16 @@ public class AuthService {
     @Transactional
     public AuthResponse verifyEmail(VerifyEmailRequest request) {
         AppUser user = userRepository.findByEmailIgnoreCase(request.email().trim())
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+                // Mensaje genérico también si el email no existe: no dar oráculo para enumerar cuentas.
+                .orElseThrow(() -> new IllegalArgumentException("Código inválido o vencido"));
 
         if (user.isEmailVerified()) {
             throw new IllegalArgumentException("El email ya fue verificado");
         }
         if (user.getVerificationCode() == null || user.getVerificationCodeExpiresAt() == null
-                || Instant.now().isAfter(user.getVerificationCodeExpiresAt())) {
-            throw new IllegalArgumentException("El código venció, pedí uno nuevo");
-        }
-        if (!user.getVerificationCode().equals(request.code().trim())) {
-            throw new IllegalArgumentException("El código es incorrecto");
+                || Instant.now().isAfter(user.getVerificationCodeExpiresAt())
+                || !user.getVerificationCode().equals(request.code().trim())) {
+            throw new IllegalArgumentException("Código inválido o vencido");
         }
 
         user.setEmailVerified(true);
@@ -135,13 +133,13 @@ public class AuthService {
 
     @Transactional
     public void resendVerificationCode(ResendCodeRequest request) {
-        AppUser user = userRepository.findByEmailIgnoreCase(request.email().trim())
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
-
-        if (user.isEmailVerified()) {
-            throw new IllegalArgumentException("El email ya fue verificado");
+        // Silencioso si el email no existe o ya está verificado: no revelar qué emails están registrados.
+        var maybeUser = userRepository.findByEmailIgnoreCase(request.email().trim());
+        if (maybeUser.isEmpty() || maybeUser.get().isEmailVerified()) {
+            return;
         }
 
+        AppUser user = maybeUser.get();
         assignVerificationCode(user);
         userRepository.save(user);
         emailService.sendVerificationCode(user.getEmail(), user.getVerificationCode());
@@ -309,6 +307,15 @@ public class AuthService {
         userRepository.save(user);
     }
 
+    @Transactional
+    public void logout(String email) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        if (user != null) {
+            user.bumpTokenVersion();
+            userRepository.save(user);
+        }
+    }
+
     public List<String> currentUserRoles(Authentication authentication) {
         if (authentication == null || authentication.getAuthorities() == null) {
             return List.of();
@@ -320,6 +327,20 @@ public class AuthService {
     public String getAvatarDataUri(String email) {
         return userRepository.findByEmailIgnoreCase(email)
                 .map(AppUser::getAvatarDataUri)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public String getDisplayName(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(AppUser::getDisplayName)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public String getUsername(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(AppUser::getUsername)
                 .orElse(null);
     }
 }

@@ -36,7 +36,7 @@ public class DiscoveryController {
             @RequestParam(defaultValue = "top") String type,
             @RequestParam(required = false) String value,
             @RequestParam(defaultValue = "30") int limit) {
-        return provider(sourceApp).discover(type, value, Math.min(limit, MAX_LIMIT));
+        return provider(sourceApp).discover(type, value, Math.min(Math.max(limit, 1), MAX_LIMIT));
     }
 
     @GetMapping("/{sourceApp}/profile")
