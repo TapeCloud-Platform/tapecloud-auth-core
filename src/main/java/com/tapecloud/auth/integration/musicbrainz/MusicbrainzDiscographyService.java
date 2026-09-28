@@ -6,7 +6,6 @@ import com.tapecloud.auth.integration.musicbrainz.dto.MusicbrainzReleaseGroupRes
 import com.tapecloud.auth.integration.musicbrainz.dto.MusicbrainzReleaseGroupResponse.ReleaseGroup;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Function;
 import org.springframework.stereotype.Service;
 
@@ -38,11 +37,10 @@ public class MusicbrainzDiscographyService {
         }
 
         return groups.stream()
-                .filter(group -> group.title() != null && !group.title().isBlank())
+                .filter(group -> group.id() != null && group.title() != null && !group.title().isBlank())
                 .sorted(Comparator.comparing(
                                 ReleaseGroup::firstReleaseDate,
-                                Comparator.nullsLast(Comparator.reverseOrder()))
-                        .reversed())
+                                Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(limit)
                 .map(group -> toItem(group, artistName, coverLookup))
                 .toList();
@@ -106,7 +104,10 @@ public class MusicbrainzDiscographyService {
         if (!group.isStudioAlbum()) {
             return "other";
         }
-        return Map.of("Single", "single", "EP", "single")
-                .getOrDefault(group.primaryType(), "album");
+        // primaryType puede venir null desde MusicBrainz: nada de Map.get (NPE).
+        if ("Single".equals(group.primaryType()) || "EP".equals(group.primaryType())) {
+            return "single";
+        }
+        return "album";
     }
 }
