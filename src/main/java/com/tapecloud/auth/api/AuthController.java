@@ -5,6 +5,7 @@ import com.tapecloud.auth.security.RegisterRateLimiter;
 import com.tapecloud.auth.service.AuthService;
 import com.tapecloud.auth.user.dto.AuthResponse;
 import com.tapecloud.auth.user.dto.ChangePasswordRequest;
+import com.tapecloud.auth.user.dto.DeleteAccountRequest;
 import com.tapecloud.auth.user.dto.LoginRequest;
 import com.tapecloud.auth.user.dto.RegisterRequest;
 import com.tapecloud.auth.user.dto.RegisterResponse;
@@ -27,6 +28,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -184,6 +186,15 @@ public class AuthController {
             authService.logout(authentication.getName());
         }
         clearTokenCookie(httpResponse);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> deleteAccount(
+            Authentication authentication,
+            @Valid @RequestBody DeleteAccountRequest request
+    ) {
+        authService.deleteAccount(authentication.getName(), request);
         return ResponseEntity.noContent().build();
     }
 

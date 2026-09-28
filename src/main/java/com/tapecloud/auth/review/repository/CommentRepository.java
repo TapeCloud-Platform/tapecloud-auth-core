@@ -10,4 +10,8 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
     List<Comment> findByReviewIdOrderByCreatedAtAsc(UUID reviewId);
 
     long countByReviewId(UUID reviewId);
+
+    void deleteByReviewId(UUID reviewId);
+
+    void deleteByAuthorEmailIgnoreCase(String authorEmail);
 }

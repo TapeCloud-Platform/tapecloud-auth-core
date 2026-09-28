@@ -25,4 +25,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
 
     @Query("select count(u) > 0 from AppUser u join u.roles r where r.name = ?1")
     boolean existsByRoleName(String roleName);
+
+    @Query("select count(u) from AppUser u join u.roles r where r.name = ?1")
+    long countByRoleName(String roleName);
 }

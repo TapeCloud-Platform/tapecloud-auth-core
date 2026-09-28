@@ -12,4 +12,8 @@ public interface ReviewLikeRepository extends JpaRepository<ReviewLike, UUID> {
     boolean existsByReviewIdAndUserEmailIgnoreCase(UUID reviewId, String userEmail);
 
     Optional<ReviewLike> findByReviewIdAndUserEmailIgnoreCase(UUID reviewId, String userEmail);
+
+    void deleteByReviewId(UUID reviewId);
+
+    void deleteByUserEmailIgnoreCase(String userEmail);
 }

@@ -5,6 +5,7 @@ import com.tapecloud.auth.exception.TotpRequiredException;
 import com.tapecloud.auth.security.LoginRateLimiter;
 import com.tapecloud.auth.user.dto.AuthResponse;
 import com.tapecloud.auth.user.dto.ChangePasswordRequest;
+import com.tapecloud.auth.user.dto.DeleteAccountRequest;
 import com.tapecloud.auth.user.dto.LoginRequest;
 import com.tapecloud.auth.user.dto.RegisterRequest;
 import com.tapecloud.auth.user.dto.RegisterResponse;
@@ -19,6 +20,10 @@ import com.tapecloud.auth.user.entity.AppUser;
 import com.tapecloud.auth.user.entity.Role;
 import com.tapecloud.auth.user.repository.AppUserRepository;
 import com.tapecloud.auth.user.repository.RoleRepository;
+import com.tapecloud.auth.review.entity.Review;
+import com.tapecloud.auth.review.repository.CommentRepository;
+import com.tapecloud.auth.review.repository.ReviewLikeRepository;
+import com.tapecloud.auth.review.repository.ReviewRepository;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -45,6 +50,9 @@ public class AuthService {
     private final EmailService emailService;
     private final TotpService totpService;
     private final LoginRateLimiter loginRateLimiter;
+    private final ReviewRepository reviewRepository;
+    private final CommentRepository commentRepository;
+    private final ReviewLikeRepository reviewLikeRepository;
 
     @Value("${tapecloud.admin.emails:}")
     private String adminEmailsProperty;
@@ -56,7 +64,10 @@ public class AuthService {
             JwtService jwtService,
             EmailService emailService,
             TotpService totpService,
-            LoginRateLimiter loginRateLimiter
+            LoginRateLimiter loginRateLimiter,
+            ReviewRepository reviewRepository,
+            CommentRepository commentRepository,
+            ReviewLikeRepository reviewLikeRepository
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -65,6 +76,9 @@ public class AuthService {
         this.emailService = emailService;
         this.totpService = totpService;
         this.loginRateLimiter = loginRateLimiter;
+        this.reviewRepository = reviewRepository;
+        this.commentRepository = commentRepository;
+        this.reviewLikeRepository = reviewLikeRepository;
     }
 
     @Transactional
@@ -314,6 +328,40 @@ public class AuthService {
             user.bumpTokenVersion();
             userRepository.save(user);
         }
+    }
+
+    /**
+     * Borrado definitivo de la cuenta: pide la contraseña como confirmación,
+     * protege a la última cuenta administradora y elimina en cascada likes,
+     * comentarios y reseñas del usuario antes de borrar el usuario.
+     */
+    @Transactional
+    public void deleteAccount(String email, DeleteAccountRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            throw new IllegalArgumentException("La contraseña es incorrecta");
+        }
+
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> "ROLE_ADMIN".equals(role.getName()));
+        if (isAdmin && userRepository.countByRoleName("ROLE_ADMIN") <= 1) {
+            throw new IllegalArgumentException("No se puede eliminar la única cuenta administradora");
+        }
+
+        String userEmail = user.getEmail();
+        // Likes y comentarios propios, incluso en reseñas ajenas.
+        reviewLikeRepository.deleteByUserEmailIgnoreCase(userEmail);
+        commentRepository.deleteByAuthorEmailIgnoreCase(userEmail);
+        // Reseñas propias con sus likes y comentarios.
+        for (Review review : reviewRepository.findByAuthorEmailIgnoreCase(userEmail)) {
+            reviewLikeRepository.deleteByReviewId(review.getId());
+            commentRepository.deleteByReviewId(review.getId());
+            reviewRepository.delete(review);
+        }
+        // Relación user_roles y usuario.
+        user.getRoles().clear();
+        userRepository.delete(user);
     }
 
     public List<String> currentUserRoles(Authentication authentication) {
