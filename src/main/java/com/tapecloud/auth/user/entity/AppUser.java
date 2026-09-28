@@ -46,6 +46,12 @@ public class AppUser {
 
     private Instant verificationCodeExpiresAt;
 
+    // Código de un solo uso para confirmar la eliminación de la cuenta (5 min).
+    @Column(length = 6)
+    private String deleteCode;
+
+    private Instant deleteCodeExpiresAt;
+
     @Column(nullable = false)
     private boolean totpEnabled = false;
 
@@ -104,6 +110,10 @@ public class AppUser {
     public void setVerificationCode(String verificationCode) { this.verificationCode = verificationCode; }
     public Instant getVerificationCodeExpiresAt() { return verificationCodeExpiresAt; }
     public void setVerificationCodeExpiresAt(Instant verificationCodeExpiresAt) { this.verificationCodeExpiresAt = verificationCodeExpiresAt; }
+    public String getDeleteCode() { return deleteCode; }
+    public void setDeleteCode(String deleteCode) { this.deleteCode = deleteCode; }
+    public Instant getDeleteCodeExpiresAt() { return deleteCodeExpiresAt; }
+    public void setDeleteCodeExpiresAt(Instant deleteCodeExpiresAt) { this.deleteCodeExpiresAt = deleteCodeExpiresAt; }
     public boolean isTotpEnabled() { return totpEnabled; }
     public void setTotpEnabled(boolean totpEnabled) { this.totpEnabled = totpEnabled; }
     public String getTotpSecret() { return totpSecret; }

@@ -198,6 +198,21 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Envía por email el código para confirmar la eliminación (solo cuentas sin 2FA). */
+    @PostMapping("/me/delete-code")
+    public ResponseEntity<Void> requestDeleteCode(
+            Authentication authentication,
+            HttpServletRequest httpRequest
+    ) {
+        String clientIp = clientIp(httpRequest);
+        String emailKey = authentication.getName().trim().toLowerCase(Locale.ROOT);
+        emailCodeRateLimiter.checkAllowed(emailKey, clientIp);
+        // Cada envío consume cuota, salga bien o no: frena el bombardeo de emails.
+        emailCodeRateLimiter.recordAttempt(emailKey, clientIp);
+        authService.requestDeleteCode(authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
     private void addTokenCookie(HttpServletResponse response, String token) {
         ResponseCookie cookie = ResponseCookie.from("tapecloud_token", token)
                 .httpOnly(true)

@@ -334,6 +334,8 @@ public class AuthService {
      * Borrado definitivo de la cuenta: pide la contraseña como confirmación,
      * protege a la última cuenta administradora y elimina en cascada likes,
      * comentarios y reseñas del usuario antes de borrar el usuario.
+     * Además exige un segundo factor: código 2FA si está activado, o código
+     * enviado por email (ver requestDeleteCode) en caso contrario.
      */
     @Transactional
     public void deleteAccount(String email, DeleteAccountRequest request) {
@@ -342,6 +344,22 @@ public class AuthService {
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new IllegalArgumentException("La contraseña es incorrecta");
+        }
+
+        if (user.isTotpEnabled()) {
+            if (request.totpCode() == null || request.totpCode().isBlank()) {
+                throw new IllegalArgumentException("Ingresá el código de tu app de autenticación");
+            }
+            if (!totpService.verifyCode(user.getTotpSecret(), request.totpCode().trim())) {
+                throw new IllegalArgumentException("El código de autenticación es incorrecto");
+            }
+        } else {
+            if (request.emailCode() == null || user.getDeleteCode() == null
+                    || user.getDeleteCodeExpiresAt() == null
+                    || Instant.now().isAfter(user.getDeleteCodeExpiresAt())
+                    || !user.getDeleteCode().equals(request.emailCode().trim())) {
+                throw new IllegalArgumentException("Código inválido o vencido");
+            }
         }
 
         boolean isAdmin = user.getRoles().stream().anyMatch(role -> "ROLE_ADMIN".equals(role.getName()));
@@ -362,6 +380,23 @@ public class AuthService {
         // Relación user_roles y usuario.
         user.getRoles().clear();
         userRepository.delete(user);
+    }
+
+    /** Genera y envía por email el código para confirmar la eliminación (solo sin 2FA). */
+    @Transactional
+    public void requestDeleteCode(String email) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (user.isTotpEnabled()) {
+            throw new IllegalArgumentException("Esta cuenta usa verificación en dos pasos: confirmá con tu app de autenticación");
+        }
+
+        String code = String.format("%06d", RANDOM.nextInt(1_000_000));
+        user.setDeleteCode(code);
+        user.setDeleteCodeExpiresAt(Instant.now().plus(VERIFICATION_CODE_TTL_MINUTES, ChronoUnit.MINUTES));
+        userRepository.save(user);
+        emailService.sendAccountDeleteCode(user.getEmail(), code);
     }
 
     public List<String> currentUserRoles(Authentication authentication) {

@@ -42,10 +42,27 @@ public class EmailService {
     }
 
     public void sendVerificationCode(String toEmail, String code) {
-        String subject = "Tu código de verificación de TapeCloud";
-        String text = "Tu código de verificación es: " + code + "\n\n"
-                + "Vence en 5 minutos. Si no creaste una cuenta en TapeCloud, ignorá este mensaje.";
-        String html = verificationHtml(code);
+        sendCode(
+                toEmail,
+                code,
+                "Tu código de verificación de TapeCloud",
+                "Tu código de verificación",
+                "Ingresalo en la app para activar tu cuenta. Vence en 5 minutos.");
+    }
+
+    public void sendAccountDeleteCode(String toEmail, String code) {
+        sendCode(
+                toEmail,
+                code,
+                "Confirmá la eliminación de tu cuenta de TapeCloud",
+                "Confirmá que sos vos",
+                "Ingresá este código para eliminar tu cuenta. Vence en 5 minutos. "
+                        + "Si no pediste esto, ignorá este mensaje y cambiá tu contraseña.");
+    }
+
+    private void sendCode(String toEmail, String code, String subject, String title, String subtitle) {
+        String text = title + ": " + code + "\n\n" + subtitle + " Si no hiciste este pedido en TapeCloud, ignorá este mensaje.";
+        String html = codeHtml(code, title, subtitle);
         // Brevo por HTTPS: Railway bloquea la salida SMTP a Gmail (timeout en puerto 587).
         if (brevoApiKey != null && !brevoApiKey.isBlank()) {
             sendViaBrevo(toEmail, subject, text, html);
@@ -65,7 +82,7 @@ public class EmailService {
     }
 
     /** Plantilla oscura compatible con clientes de email (tablas + estilos inline). */
-    private String verificationHtml(String code) {
+    private String codeHtml(String code, String title, String subtitle) {
         StringBuilder digits = new StringBuilder();
         for (char c : code.toCharArray()) {
             digits.append("<td style=\"background:#1a2236;border:1px solid #2b3458;border-radius:12px;")
@@ -84,12 +101,11 @@ public class EmailService {
                 + "<div style=\"font-family:Arial,sans-serif;font-size:12px;color:rgba(255,255,255,0.8);letter-spacing:2px;\">"
                 + "CINE &amp; MÚSICA</div></td></tr>"
                 + "<tr><td style=\"padding:28px;font-family:Arial,sans-serif;color:#e8edf7;\">"
-                + "<div style=\"font-size:16px;font-weight:bold;margin-bottom:8px;\">Tu código de verificación</div>"
-                + "<div style=\"font-size:13px;color:#9aa6c2;margin-bottom:20px;\">"
-                + "Ingresalo en la app para activar tu cuenta. Vence en 5 minutos.</div>"
+                + "<div style=\"font-size:16px;font-weight:bold;margin-bottom:8px;\">" + title + "</div>"
+                + "<div style=\"font-size:13px;color:#9aa6c2;margin-bottom:20px;\">" + subtitle + "</div>"
                 + "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\"><tr>" + digits + "</tr></table>"
                 + "<div style=\"font-size:12px;color:#6b7694;margin-top:20px;\">"
-                + "Si no creaste una cuenta en TapeCloud, ignorá este mensaje.</div>"
+                + "Si no hiciste este pedido en TapeCloud, ignorá este mensaje.</div>"
                 + "</td></tr></table>"
                 + "<div style=\"font-family:Arial,sans-serif;font-size:11px;color:#4b5570;margin-top:16px;\">"
                 + "TapeCloud · Películas y música</div>"
