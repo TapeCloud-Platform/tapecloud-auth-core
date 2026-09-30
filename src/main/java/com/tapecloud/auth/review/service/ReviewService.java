@@ -196,14 +196,16 @@ public class ReviewService {
                 likedByCurrentUser,
                 ownedByCurrentUser,
                 review.getCreatedAt(),
-                review.getUpdatedAt()
+                review.getUpdatedAt(),
+                review.getLastEditedAt()
         );
     }
 
     /**
      * Edita una reseña propia (o cualquier reseña si es admin). Solo se puede
      * editar una vez cada {@code app.review.edit-cooldown-seconds} (429 si es
-     * muy pronto) para evitar ediciones masivas.
+     * muy pronto) para evitar ediciones masivas. La primera edición siempre
+     * está permitida (lastEditedAt null).
      */
     @Transactional
     public ReviewResponse updateReview(UUID reviewId, ReviewRequest request, String userEmail, boolean isAdmin) {
@@ -215,9 +217,9 @@ public class ReviewService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes permisos para editar esta reseña");
         }
 
-        Instant reference = review.getUpdatedAt() != null ? review.getUpdatedAt() : review.getCreatedAt();
-        if (reference != null) {
-            long elapsed = Duration.between(reference, Instant.now()).getSeconds();
+        if (review.getLastEditedAt() != null) {
+            // elapsed negativo (reloj desfasado) se trata como 0: espera el cooldown completo, nunca más.
+            long elapsed = Math.max(0, Duration.between(review.getLastEditedAt(), Instant.now()).getSeconds());
             if (elapsed < editCooldownSeconds) {
                 throw new TooManyAttemptsException(
                         "Podés volver a editar en " + (editCooldownSeconds - elapsed) + " segundos");
@@ -235,6 +237,7 @@ public class ReviewService {
         review.setBody(request.body().trim());
         review.setRating(request.rating());
         review.setIsSpoiler(request.isSpoiler() != null ? request.isSpoiler() : Boolean.FALSE);
+        review.setLastEditedAt(Instant.now());
 
         reviewRepository.save(review);
         return toResponse(review, userEmail);

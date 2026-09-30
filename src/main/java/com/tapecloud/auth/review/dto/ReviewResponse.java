@@ -20,7 +20,8 @@ public record ReviewResponse(
         boolean likedByCurrentUser,
         boolean ownedByCurrentUser,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Instant lastEditedAt
 ) {
 }
 

@@ -48,6 +48,14 @@ public class Review {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    /**
+     * Última edición manual de la reseña. Null = nunca editada (la primera
+     * edición siempre está permitida; el cooldown corre solo entre ediciones).
+     * No se usa updatedAt porque puede quedar en el futuro por relojes
+     * desfasados y bloquearía con conteos absurdos.
+     */
+    private Instant lastEditedAt;
+
     @Column(nullable = false, columnDefinition = "boolean default false")
     private Boolean isSpoiler; // Marcador de spoilers
 
@@ -86,6 +94,8 @@ public class Review {
     public Boolean getIsSpoiler() { return isSpoiler; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public Instant getLastEditedAt() { return lastEditedAt; }
+    public void setLastEditedAt(Instant lastEditedAt) { this.lastEditedAt = lastEditedAt; }
 
     public void setTitle(String title) { this.title = title; }
     public void setBody(String body) { this.body = body; }
