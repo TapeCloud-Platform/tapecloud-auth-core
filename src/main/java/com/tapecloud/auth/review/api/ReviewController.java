@@ -78,7 +78,9 @@ public class ReviewController {
             @Valid @RequestBody ReviewRequest request,
             Authentication authentication
     ) {
-        return ResponseEntity.ok(reviewService.updateReview(reviewId, request, authentication.getName()));
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        return ResponseEntity.ok(reviewService.updateReview(reviewId, request, authentication.getName(), isAdmin));
     }
 
     @DeleteMapping("/{reviewId}")

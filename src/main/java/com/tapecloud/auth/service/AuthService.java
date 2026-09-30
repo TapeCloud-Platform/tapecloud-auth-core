@@ -2,6 +2,8 @@ package com.tapecloud.auth.service;
 
 import com.tapecloud.auth.config.JwtService;
 import com.tapecloud.auth.exception.TotpRequiredException;
+import com.tapecloud.auth.moderation.AvatarValidationService;
+import com.tapecloud.auth.moderation.ProfanityFilterService;
 import com.tapecloud.auth.security.LoginRateLimiter;
 import com.tapecloud.auth.user.dto.AuthResponse;
 import com.tapecloud.auth.user.dto.ChangePasswordRequest;
@@ -53,6 +55,8 @@ public class AuthService {
     private final ReviewRepository reviewRepository;
     private final CommentRepository commentRepository;
     private final ReviewLikeRepository reviewLikeRepository;
+    private final ProfanityFilterService profanityFilterService;
+    private final AvatarValidationService avatarValidationService;
 
     @Value("${tapecloud.admin.emails:}")
     private String adminEmailsProperty;
@@ -67,7 +71,9 @@ public class AuthService {
             LoginRateLimiter loginRateLimiter,
             ReviewRepository reviewRepository,
             CommentRepository commentRepository,
-            ReviewLikeRepository reviewLikeRepository
+            ReviewLikeRepository reviewLikeRepository,
+            ProfanityFilterService profanityFilterService,
+            AvatarValidationService avatarValidationService
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -79,12 +85,16 @@ public class AuthService {
         this.reviewRepository = reviewRepository;
         this.commentRepository = commentRepository;
         this.reviewLikeRepository = reviewLikeRepository;
+        this.profanityFilterService = profanityFilterService;
+        this.avatarValidationService = avatarValidationService;
     }
 
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
         String normalizedEmail = request.email().trim();
         String normalizedUsername = request.username().trim();
+
+        profanityFilterService.requireCleanUsername(normalizedUsername);
 
         // Mensaje único para email o username en uso: no revelar cuál está registrado.
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)
@@ -279,6 +289,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
         String normalizedUsername = request.username().trim();
+        profanityFilterService.requireCleanUsername(normalizedUsername);
         if (!normalizedUsername.equalsIgnoreCase(user.getUsername())
                 && userRepository.existsByUsernameIgnoreCase(normalizedUsername)) {
             throw new IllegalArgumentException("Ese nombre de usuario ya está en uso");
@@ -298,9 +309,8 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
         String avatarDataUri = request.avatarDataUri();
-        if (avatarDataUri != null && !avatarDataUri.isBlank() && !avatarDataUri.startsWith("data:image/")) {
-            throw new IllegalArgumentException("La imagen no es válida");
-        }
+        // Controles de tipo MIME real, peso y dimensiones (además del @Size del DTO).
+        avatarValidationService.validate(avatarDataUri);
 
         user.setAvatarDataUri(avatarDataUri == null || avatarDataUri.isBlank() ? null : avatarDataUri);
         userRepository.save(user);

@@ -8,11 +8,11 @@ import jakarta.validation.constraints.Size;
 
 public record ReviewRequest(
         @NotBlank(message = "El título es obligatorio")
-        @Size(max = 200, message = "El título no puede superar los 200 caracteres")
+        @Size(max = 150, message = "El título no puede superar los 150 caracteres")
         String title,
 
         @NotBlank(message = "La opinión/cuerpo es obligatoria")
-        @Size(max = 4000, message = "El cuerpo no puede superar los 4000 caracteres")
+        @Size(max = 750, message = "La reseña no puede superar los 750 caracteres")
         String body,
 
         @NotNull(message = "La puntuación es obligatoria")

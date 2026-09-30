@@ -1,5 +1,6 @@
 package com.tapecloud.auth.review.service;
 
+import com.tapecloud.auth.moderation.ProfanityFilterService;
 import com.tapecloud.auth.review.dto.CommentRequest;
 import com.tapecloud.auth.review.dto.CommentResponse;
 import com.tapecloud.auth.review.entity.Comment;
@@ -21,15 +22,18 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final ReviewRepository reviewRepository;
     private final AppUserRepository userRepository;
+    private final ProfanityFilterService profanityFilterService;
 
     public CommentService(
             CommentRepository commentRepository,
             ReviewRepository reviewRepository,
-            AppUserRepository userRepository
+            AppUserRepository userRepository,
+            ProfanityFilterService profanityFilterService
     ) {
         this.commentRepository = commentRepository;
         this.reviewRepository = reviewRepository;
         this.userRepository = userRepository;
+        this.profanityFilterService = profanityFilterService;
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +50,8 @@ public class CommentService {
 
         AppUser user = userRepository.findByEmailIgnoreCase(userEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        profanityFilterService.requireClean(request.body(), "El comentario");
 
         String displayName = user.getDisplayName() != null ? user.getDisplayName() : user.getEmail().split("@")[0];
 

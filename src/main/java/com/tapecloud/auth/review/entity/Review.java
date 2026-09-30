@@ -33,10 +33,10 @@ public class Review {
     @Column(nullable = false, length = 120)
     private String authorDisplayName;
 
-    @Column(nullable = false, length = 200)
+    @Column(nullable = false, length = 150)
     private String title;
 
-    @Column(nullable = false, length = 4000)
+    @Column(nullable = false, length = 750)
     private String body;
 
     @Column(nullable = false)

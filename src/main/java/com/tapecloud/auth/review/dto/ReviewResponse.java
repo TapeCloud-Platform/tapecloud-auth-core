@@ -19,7 +19,8 @@ public record ReviewResponse(
         long commentsCount,
         boolean likedByCurrentUser,
         boolean ownedByCurrentUser,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
 }
 
