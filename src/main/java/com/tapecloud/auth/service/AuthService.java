@@ -1,0 +1,429 @@
+package com.tapecloud.auth.service;
+
+import com.tapecloud.auth.config.JwtService;
+import com.tapecloud.auth.exception.TotpRequiredException;
+import com.tapecloud.auth.security.LoginRateLimiter;
+import com.tapecloud.auth.user.dto.AuthResponse;
+import com.tapecloud.auth.user.dto.ChangePasswordRequest;
+import com.tapecloud.auth.user.dto.DeleteAccountRequest;
+import com.tapecloud.auth.user.dto.LoginRequest;
+import com.tapecloud.auth.user.dto.RegisterRequest;
+import com.tapecloud.auth.user.dto.RegisterResponse;
+import com.tapecloud.auth.user.dto.ResendCodeRequest;
+import com.tapecloud.auth.user.dto.TotpDisableRequest;
+import com.tapecloud.auth.user.dto.TotpEnableRequest;
+import com.tapecloud.auth.user.dto.TotpSetupResponse;
+import com.tapecloud.auth.user.dto.UpdateAvatarRequest;
+import com.tapecloud.auth.user.dto.UpdateUsernameRequest;
+import com.tapecloud.auth.user.dto.VerifyEmailRequest;
+import com.tapecloud.auth.user.entity.AppUser;
+import com.tapecloud.auth.user.entity.Role;
+import com.tapecloud.auth.user.repository.AppUserRepository;
+import com.tapecloud.auth.user.repository.RoleRepository;
+import com.tapecloud.auth.review.entity.Review;
+import com.tapecloud.auth.review.repository.CommentRepository;
+import com.tapecloud.auth.review.repository.ReviewLikeRepository;
+import com.tapecloud.auth.review.repository.ReviewRepository;
+import java.security.SecureRandom;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class AuthService {
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+    private static final long VERIFICATION_CODE_TTL_MINUTES = 5;
+
+    private final AppUserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+    private final EmailService emailService;
+    private final TotpService totpService;
+    private final LoginRateLimiter loginRateLimiter;
+    private final ReviewRepository reviewRepository;
+    private final CommentRepository commentRepository;
+    private final ReviewLikeRepository reviewLikeRepository;
+
+    @Value("${tapecloud.admin.emails:}")
+    private String adminEmailsProperty;
+
+    public AuthService(
+            AppUserRepository userRepository,
+            RoleRepository roleRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            EmailService emailService,
+            TotpService totpService,
+            LoginRateLimiter loginRateLimiter,
+            ReviewRepository reviewRepository,
+            CommentRepository commentRepository,
+            ReviewLikeRepository reviewLikeRepository
+    ) {
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.emailService = emailService;
+        this.totpService = totpService;
+        this.loginRateLimiter = loginRateLimiter;
+        this.reviewRepository = reviewRepository;
+        this.commentRepository = commentRepository;
+        this.reviewLikeRepository = reviewLikeRepository;
+    }
+
+    @Transactional
+    public RegisterResponse register(RegisterRequest request) {
+        String normalizedEmail = request.email().trim();
+        String normalizedUsername = request.username().trim();
+
+        // Mensaje único para email o username en uso: no revelar cuál está registrado.
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)
+                || userRepository.existsByUsernameIgnoreCase(normalizedUsername)) {
+            throw new IllegalArgumentException("No se pudo completar el registro con esos datos");
+        }
+
+        Role defaultRole = roleRepository.findByName("ROLE_USER")
+                .orElseGet(() -> roleRepository.save(new Role("ROLE_USER")));
+
+        AppUser user = new AppUser(
+                normalizedEmail.toLowerCase(Locale.ROOT),
+                passwordEncoder.encode(request.password()),
+                normalizedUsername
+        );
+        user.addRole(defaultRole);
+
+        if (isAdminEmail(normalizedEmail)) {
+            Role adminRole = roleRepository.findByName("ROLE_ADMIN")
+                    .orElseGet(() -> roleRepository.save(new Role("ROLE_ADMIN")));
+            user.addRole(adminRole);
+        }
+
+        assignVerificationCode(user);
+        userRepository.save(user);
+        emailService.sendVerificationCode(user.getEmail(), user.getVerificationCode());
+
+        return new RegisterResponse(user.getEmail(), "Te enviamos un código de verificación a tu email");
+    }
+
+    private void assignVerificationCode(AppUser user) {
+        String code = String.format("%06d", RANDOM.nextInt(1_000_000));
+        user.setVerificationCode(code);
+        user.setVerificationCodeExpiresAt(Instant.now().plus(VERIFICATION_CODE_TTL_MINUTES, ChronoUnit.MINUTES));
+        user.setEmailVerified(false);
+    }
+
+    @Transactional
+    public AuthResponse verifyEmail(VerifyEmailRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(request.email().trim())
+                // Mensaje genérico también si el email no existe: no dar oráculo para enumerar cuentas.
+                .orElseThrow(() -> new IllegalArgumentException("Código inválido o vencido"));
+
+        if (user.isEmailVerified()) {
+            throw new IllegalArgumentException("El email ya fue verificado");
+        }
+        if (user.getVerificationCode() == null || user.getVerificationCodeExpiresAt() == null
+                || Instant.now().isAfter(user.getVerificationCodeExpiresAt())
+                || !user.getVerificationCode().equals(request.code().trim())) {
+            throw new IllegalArgumentException("Código inválido o vencido");
+        }
+
+        user.setEmailVerified(true);
+        user.setVerificationCode(null);
+        user.setVerificationCodeExpiresAt(null);
+        userRepository.save(user);
+
+        return buildResponse(user);
+    }
+
+    @Transactional
+    public void resendVerificationCode(ResendCodeRequest request) {
+        // Silencioso si el email no existe o ya está verificado: no revelar qué emails están registrados.
+        var maybeUser = userRepository.findByEmailIgnoreCase(request.email().trim());
+        if (maybeUser.isEmpty() || maybeUser.get().isEmailVerified()) {
+            return;
+        }
+
+        AppUser user = maybeUser.get();
+        assignVerificationCode(user);
+        userRepository.save(user);
+        emailService.sendVerificationCode(user.getEmail(), user.getVerificationCode());
+    }
+
+    private boolean isAdminEmail(String email) {
+        if (adminEmailsProperty == null || adminEmailsProperty.isBlank()) {
+            return false;
+        }
+        String lowerEmail = email.toLowerCase(Locale.ROOT);
+        return Arrays.stream(adminEmailsProperty.split(","))
+                .map(String::trim)
+                .map(e -> e.toLowerCase(Locale.ROOT))
+                .anyMatch(lowerEmail::equals);
+    }
+
+
+    @Transactional(readOnly = true)
+    public AuthResponse login(LoginRequest request, String clientIp) {
+        String identifier = request.identifier().trim();
+        loginRateLimiter.checkAllowed(identifier, clientIp);
+
+        AppUser user = userRepository.findByEmailIgnoreCaseOrUsernameIgnoreCase(identifier, identifier)
+                .orElseGet(() -> {
+                    loginRateLimiter.recordFailure(identifier, clientIp);
+                    throw new IllegalArgumentException("Credenciales inválidas");
+                });
+
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            loginRateLimiter.recordFailure(identifier, clientIp);
+            throw new IllegalArgumentException("Credenciales inválidas");
+        }
+
+        if (!user.isEnabled()) {
+            loginRateLimiter.recordFailure(identifier, clientIp);
+            throw new IllegalArgumentException("Esta cuenta está deshabilitada");
+        }
+
+        if (!user.isEmailVerified()) {
+            throw new IllegalArgumentException("Verificá tu email antes de iniciar sesión");
+        }
+
+        if (user.isTotpEnabled()) {
+            if (request.totpCode() == null || request.totpCode().isBlank()) {
+                // Todavía no cuenta como intento fallido: es el primer paso normal del flujo de 2FA.
+                throw new TotpRequiredException("Ingresá el código de tu app de autenticación");
+            }
+            if (!totpService.verifyCode(user.getTotpSecret(), request.totpCode().trim())) {
+                loginRateLimiter.recordFailure(identifier, clientIp);
+                throw new TotpRequiredException("El código de autenticación es incorrecto");
+            }
+        }
+
+        loginRateLimiter.recordSuccess(identifier, clientIp);
+        return buildResponse(user);
+    }
+
+    @Transactional
+    public TotpSetupResponse setupTotp(String email) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (user.isTotpEnabled()) {
+            throw new IllegalArgumentException("La verificación en dos pasos ya está activada, desactivala primero para generar un nuevo código QR");
+        }
+
+        String secret = totpService.generateSecret();
+        user.setTotpSecret(secret);
+        userRepository.save(user);
+
+        return new TotpSetupResponse(secret, totpService.generateQrCodeDataUri(user.getEmail(), secret));
+    }
+
+    @Transactional
+    public void enableTotp(String email, TotpEnableRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (user.isTotpEnabled()) {
+            throw new IllegalArgumentException("La verificación en dos pasos ya está activada");
+        }
+        if (user.getTotpSecret() == null) {
+            throw new IllegalArgumentException("Primero generá un código QR");
+        }
+        if (!totpService.verifyCode(user.getTotpSecret(), request.code().trim())) {
+            throw new IllegalArgumentException("El código es incorrecto");
+        }
+
+        user.setTotpEnabled(true);
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void disableTotp(String email, TotpDisableRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            throw new IllegalArgumentException("La contraseña es incorrecta");
+        }
+
+        user.setTotpEnabled(false);
+        user.setTotpSecret(null);
+        userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isTotpEnabled(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(AppUser::isTotpEnabled)
+                .orElse(false);
+    }
+
+    private AuthResponse buildResponse(AppUser user) {
+        String token = jwtService.generateToken(user);
+        List<String> roles = user.getRoles().stream().map(Role::getName).toList();
+        return new AuthResponse(token, user.getEmail(), user.getUsername(), user.getDisplayName(), roles, user.getAvatarDataUri());
+    }
+
+    @Transactional
+    public AuthResponse updateUsername(String email, UpdateUsernameRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        String normalizedUsername = request.username().trim();
+        if (!normalizedUsername.equalsIgnoreCase(user.getUsername())
+                && userRepository.existsByUsernameIgnoreCase(normalizedUsername)) {
+            throw new IllegalArgumentException("Ese nombre de usuario ya está en uso");
+        }
+
+        // El nombre de usuario es tanto el identificador de login como el nombre público,
+        // así que se mantienen sincronizados (igual que al registrarse).
+        user.setUsername(normalizedUsername);
+        user.setDisplayName(normalizedUsername);
+        userRepository.save(user);
+        return buildResponse(user);
+    }
+
+    @Transactional
+    public AuthResponse updateAvatar(String email, UpdateAvatarRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        String avatarDataUri = request.avatarDataUri();
+        if (avatarDataUri != null && !avatarDataUri.isBlank() && !avatarDataUri.startsWith("data:image/")) {
+            throw new IllegalArgumentException("La imagen no es válida");
+        }
+
+        user.setAvatarDataUri(avatarDataUri == null || avatarDataUri.isBlank() ? null : avatarDataUri);
+        userRepository.save(user);
+        return buildResponse(user);
+    }
+
+    @Transactional
+    public void changePassword(String email, ChangePasswordRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("La contraseña actual no es correcta");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        user.bumpTokenVersion();
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void logout(String email) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        if (user != null) {
+            user.bumpTokenVersion();
+            userRepository.save(user);
+        }
+    }
+
+    /**
+     * Borrado definitivo de la cuenta: pide la contraseña como confirmación,
+     * protege a la última cuenta administradora y elimina en cascada likes,
+     * comentarios y reseñas del usuario antes de borrar el usuario.
+     * Además exige un segundo factor: código 2FA si está activado, o código
+     * enviado por email (ver requestDeleteCode) en caso contrario.
+     */
+    @Transactional
+    public void deleteAccount(String email, DeleteAccountRequest request) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            throw new IllegalArgumentException("La contraseña es incorrecta");
+        }
+
+        if (user.isTotpEnabled()) {
+            if (request.totpCode() == null || request.totpCode().isBlank()) {
+                throw new IllegalArgumentException("Ingresá el código de tu app de autenticación");
+            }
+            if (!totpService.verifyCode(user.getTotpSecret(), request.totpCode().trim())) {
+                throw new IllegalArgumentException("El código de autenticación es incorrecto");
+            }
+        } else {
+            if (request.emailCode() == null || user.getDeleteCode() == null
+                    || user.getDeleteCodeExpiresAt() == null
+                    || Instant.now().isAfter(user.getDeleteCodeExpiresAt())
+                    || !user.getDeleteCode().equals(request.emailCode().trim())) {
+                throw new IllegalArgumentException("Código inválido o vencido");
+            }
+        }
+
+        boolean isAdmin = user.getRoles().stream().anyMatch(role -> "ROLE_ADMIN".equals(role.getName()));
+        if (isAdmin && userRepository.countByRoleName("ROLE_ADMIN") <= 1) {
+            throw new IllegalArgumentException("No se puede eliminar la única cuenta administradora");
+        }
+
+        String userEmail = user.getEmail();
+        // Likes y comentarios propios, incluso en reseñas ajenas.
+        reviewLikeRepository.deleteByUserEmailIgnoreCase(userEmail);
+        commentRepository.deleteByAuthorEmailIgnoreCase(userEmail);
+        // Reseñas propias con sus likes y comentarios.
+        for (Review review : reviewRepository.findByAuthorEmailIgnoreCase(userEmail)) {
+            reviewLikeRepository.deleteByReviewId(review.getId());
+            commentRepository.deleteByReviewId(review.getId());
+            reviewRepository.delete(review);
+        }
+        // Relación user_roles y usuario.
+        user.getRoles().clear();
+        userRepository.delete(user);
+    }
+
+    /** Genera y envía por email el código para confirmar la eliminación (solo sin 2FA). */
+    @Transactional
+    public void requestDeleteCode(String email) {
+        AppUser user = userRepository.findByEmailIgnoreCase(email.trim())
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (user.isTotpEnabled()) {
+            throw new IllegalArgumentException("Esta cuenta usa verificación en dos pasos: confirmá con tu app de autenticación");
+        }
+
+        String code = String.format("%06d", RANDOM.nextInt(1_000_000));
+        user.setDeleteCode(code);
+        user.setDeleteCodeExpiresAt(Instant.now().plus(VERIFICATION_CODE_TTL_MINUTES, ChronoUnit.MINUTES));
+        userRepository.save(user);
+        emailService.sendAccountDeleteCode(user.getEmail(), code);
+    }
+
+    public List<String> currentUserRoles(Authentication authentication) {
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return List.of();
+        }
+        return authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public String getAvatarDataUri(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(AppUser::getAvatarDataUri)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public String getDisplayName(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(AppUser::getDisplayName)
+                .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public String getUsername(String email) {
+        return userRepository.findByEmailIgnoreCase(email)
+                .map(AppUser::getUsername)
+                .orElse(null);
+    }
+}

@@ -1,0 +1,141 @@
+services:
+  # Backend - Java/Spring Boot
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}
+      - DB_URL=${DB_URL}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_DRIVER_CLASS_NAME=${DB_DRIVER_CLASS_NAME}
+      - HIBERNATE_DIALECT=${HIBERNATE_DIALECT}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION_MS=${JWT_EXPIRATION_MS}
+      - TOTP_ISSUER=${TOTP_ISSUER}
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - MAIL_FROM=${MAIL_FROM}
+      - TMDB_BASE_URL=${TMDB_BASE_URL}
+      - TMDB_IMAGE_BASE_URL=${TMDB_IMAGE_BASE_URL}
+      - TMDB_LANGUAGE=${TMDB_LANGUAGE}
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - TMDB_API_READ_ACCESS_TOKEN=${TMDB_API_READ_ACCESS_TOKEN}
+      - MUSICBRAINZ_API_BASE_URL=${MUSICBRAINZ_API_BASE_URL}
+      - MUSICBRAINZ_APP_NAME=${MUSICBRAINZ_APP_NAME}
+      - MUSICBRAINZ_APP_VERSION=${MUSICBRAINZ_APP_VERSION}
+      - MUSICBRAINZ_CONTACT_EMAIL=${MUSICBRAINZ_CONTACT_EMAIL}
+      - LASTFM_API_KEY=${LASTFM_API_KEY}
+      - LASTFM_BASE_URL=${LASTFM_BASE_URL}
+    volumes:
+      - ./data:/workspace/data
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+          ignore:
+            - .git/
+            - data/
+            - target/
+            - .env
+            - .env.*
+    networks:
+      - tapecloud-network
+    container_name: tapecloud-backend
+
+  # Portal - React/Vite
+  portal:
+    build:
+      context: ../tapecloud-portal
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=${VITE_API_URL}
+    develop:
+      watch:
+        - action: sync
+          path: ../tapecloud-portal/src
+          target: /app/src
+          initial_sync: true
+        - action: rebuild
+          path: ../tapecloud-portal
+          ignore:
+            - src/
+            - node_modules/
+            - .git/
+            - .env
+            - .env.*
+    networks:
+      - tapecloud-network
+    container_name: tapecloud-portal
+    depends_on:
+      - backend
+
+  # TapeFlix - React/Vite
+  tapeflix:
+    build:
+      context: ../tapeflix-app
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5174:5174"
+    environment:
+      - VITE_API_URL=${VITE_API_URL}
+    develop:
+      watch:
+        - action: sync
+          path: ../tapeflix-app/src
+          target: /app/src
+          initial_sync: true
+        - action: rebuild
+          path: ../tapeflix-app
+          ignore:
+            - src/
+            - node_modules/
+            - .git/
+            - .env
+            - .env.*
+    networks:
+      - tapecloud-network
+    container_name: tapecloud-tapeflix
+    depends_on:
+      - backend
+
+  # TapeBeat - React/Vite
+  tapebeat:
+    build:
+      context: ../tapebeat-app
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5175:5175"
+    environment:
+      - VITE_API_URL=${VITE_API_URL}
+    develop:
+      watch:
+        - action: sync
+          path: ../tapebeat-app/src
+          target: /app/src
+          initial_sync: true
+        - action: rebuild
+          path: ../tapebeat-app
+          ignore:
+            - src/
+            - node_modules/
+            - .git/
+            - .env
+            - .env.*
+    networks:
+      - tapecloud-network
+    container_name: tapecloud-tapebeat
+    depends_on:
+      - backend
+
+networks:
+  tapecloud-network:
+    driver: bridge
+

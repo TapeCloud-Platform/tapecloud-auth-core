@@ -1,0 +1,7 @@
+# PALABRAS PERSONALIZADAS - Admin puede agregar/quitar sin tocar código
+# Ejemplos:
+# politician_name1
+# politician_name2
+# localidad_profana1
+# ... palabras queConsideres conveniente agregar
+# Cada palabra en una línea

@@ -1,0 +1,25 @@
+# Prod: build del jar + imagen mínima JRE con usuario no-root.
+FROM maven:3.9-eclipse-temurin-21 AS builder
+
+WORKDIR /workspace
+
+COPY pom.xml mvnw mvnw.cmd ./
+COPY .mvn .mvn
+COPY src src
+
+RUN ./mvnw -q clean package -DskipTests
+
+FROM eclipse-temurin:21-jre
+
+RUN useradd -m appuser
+
+WORKDIR /workspace
+
+COPY --from=builder /workspace/target/*.jar app.jar
+RUN chown appuser:appuser app.jar
+
+USER appuser
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "app.jar"]

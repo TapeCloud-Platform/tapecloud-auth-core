@@ -1,0 +1,18 @@
+# No meter al contexto de build: secretos, artefactos, datos locales ni dev-only.
+# OJO: no se excluyen .mvn/mvnw/mvnw.cmd porque Dockerfile.prod los usa (./mvnw);
+# excluirlos rompería su build con "COPY failed: no source files".
+.git
+.gitignore
+target/
+data/
+*.mv.db
+*.trace.db
+.env
+.env.*
+!.env.example
+docs/
+.idea/
+.vscode/
+*.log
+Dockerfile.dev
+docker-compose.yml
