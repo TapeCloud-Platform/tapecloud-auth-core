@@ -19,6 +19,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
 
     boolean existsByUsernameIgnoreCase(String username);
 
+    /** Búsqueda pública de usuarios por nombre: solo para el header, sin exponer emails. */
+    java.util.List<AppUser> findTop10ByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(
+            String username, String displayName);
+
+    java.util.Optional<AppUser> findByUsernameIgnoreCase(String username);
+
     // El login acepta email o username: se busca por cualquiera de los dos.
     @EntityGraph(attributePaths = "roles")
     Optional<AppUser> findByEmailIgnoreCaseOrUsernameIgnoreCase(String email, String username);
