@@ -2,6 +2,8 @@ package com.tapecloud.auth.integration.tmdb;
 
 import com.tapecloud.auth.integration.tmdb.dto.TmdbGenreListResponse;
 import com.tapecloud.auth.integration.tmdb.dto.TmdbMoviePageResponse;
+import com.tapecloud.auth.integration.tmdb.dto.TmdbPersonCreditsResponse;
+import com.tapecloud.auth.integration.tmdb.dto.TmdbPersonDetailResponse;
 import com.tapecloud.auth.integration.tmdb.dto.TmdbPersonSearchResponse;
 import java.net.URI;
 import java.util.List;
@@ -125,6 +127,24 @@ public class TmdbClient {
             return null;
         }
         return properties.getImageBaseUrl() + posterPath;
+    }
+
+    /** Detalle de una persona (bio, cumpleaños, popularidad) para la ficha /person. */
+    public TmdbPersonDetailResponse fetchPersonDetails(long personId) {
+        requireApiKey();
+
+        URI uri = baseBuilder("/person/" + personId).encode().build().toUri();
+
+        return restClient.get().uri(uri).retrieve().body(TmdbPersonDetailResponse.class);
+    }
+
+    /** Créditos de cine de una persona, para "conocido por" y similares. */
+    public TmdbPersonCreditsResponse fetchPersonMovieCredits(long personId) {
+        requireApiKey();
+
+        URI uri = baseBuilder("/person/" + personId + "/movie_credits").encode().build().toUri();
+
+        return restClient.get().uri(uri).retrieve().body(TmdbPersonCreditsResponse.class);
     }
 }
 

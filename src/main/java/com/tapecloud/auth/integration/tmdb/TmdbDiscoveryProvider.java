@@ -88,6 +88,65 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
         return tmdbClient.discoverMovies("with_people", String.valueOf(personId), 1);
     }
 
+    /**
+     * Ficha de una persona para /person/:nombre. Resuelve el nombre al primer
+     * match de TMDb y devuelve bio, foto, departamento y películas destacadas.
+     */
+    @Override
+    public com.tapecloud.auth.discovery.DiscoveryProfile profile(String name) {
+        TmdbPersonSearchResponse search = tmdbClient.searchPerson(requireValue(name, "persona"));
+        if (search == null || search.results() == null || search.results().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Persona no encontrada: " + name);
+        }
+        var match = search.results().get(0);
+
+        com.tapecloud.auth.integration.tmdb.dto.TmdbPersonDetailResponse detail;
+        try {
+            detail = tmdbClient.fetchPersonDetails(match.id());
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Persona no encontrada: " + name);
+        }
+
+        List<String> knownFor = List.of();
+        try {
+            var credits = tmdbClient.fetchPersonMovieCredits(match.id());
+            if (credits != null && credits.cast() != null) {
+                knownFor = credits.cast().stream()
+                        .filter(c -> c.title() != null && !c.title().isBlank())
+                        .sorted((a, b) -> Double.compare(
+                                b.popularity() != null ? b.popularity() : 0,
+                                a.popularity() != null ? a.popularity() : 0))
+                        .limit(5)
+                        .map(com.tapecloud.auth.integration.tmdb.dto.TmdbPersonCreditsResponse.TmdbCredit::title)
+                        .toList();
+            }
+        } catch (Exception ignored) {
+            // Sin créditos se devuelve igual la ficha con bio y foto.
+        }
+
+        String department = detail.knownForDepartment() != null
+                ? detail.knownForDepartment()
+                : match.knownForDepartment();
+        List<String> tags = department != null ? List.of(department) : List.of();
+        String bio = detail.biography() != null && !detail.biography().isBlank() ? detail.biography() : "";
+        String listeners = detail.birthday() != null && !detail.birthday().isBlank()
+                ? "Nació el " + detail.birthday()
+                : "";
+        String playcount = detail.popularity() != null ? String.valueOf(detail.popularity().intValue()) : "0";
+
+        return new com.tapecloud.auth.discovery.DiscoveryProfile(
+                detail.name() != null ? detail.name() : match.name(),
+                tmdbClient.posterUrl(detail.profilePath() != null ? detail.profilePath() : match.profilePath()),
+                bio.isEmpty() && !knownFor.isEmpty()
+                        ? "Conocido por: " + String.join(", ", knownFor)
+                        : bio,
+                listeners,
+                playcount,
+                tags,
+                List.of(),
+                "https://www.themoviedb.org/person/" + match.id());
+    }
+
     /** Búsqueda directa de personas (actores/directores) para el header: devuelve perfiles, no películas. */
     private List<DiscoveryItem> people(String query, int limit) {
         TmdbPersonSearchResponse response = tmdbClient.searchPerson(query);
