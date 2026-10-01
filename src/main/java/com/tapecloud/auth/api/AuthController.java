@@ -44,6 +44,12 @@ public class AuthController {
     private final RegisterRateLimiter registerRateLimiter;
     private final EmailCodeRateLimiter emailCodeRateLimiter;
 
+    @org.springframework.beans.factory.annotation.Value("${app.auth.cookie-secure:false}")
+    private boolean cookieSecure;
+
+    @org.springframework.beans.factory.annotation.Value("${app.auth.cookie-samesite:Lax}")
+    private String cookieSameSite;
+
     public AuthController(AuthService authService, RegisterRateLimiter registerRateLimiter,
             EmailCodeRateLimiter emailCodeRateLimiter) {
         this.authService = authService;
@@ -216,8 +222,8 @@ public class AuthController {
     private void addTokenCookie(HttpServletResponse response, String token) {
         ResponseCookie cookie = ResponseCookie.from("tapecloud_token", token)
                 .httpOnly(true)
-                .secure(false) // localhost es http; en prod detrás de https poner true vía prop si hace falta
-                .sameSite("Lax")
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite)
                 .path("/")
                 .maxAge(Duration.ofHours(8))
                 .build();
@@ -227,8 +233,8 @@ public class AuthController {
     private void clearTokenCookie(HttpServletResponse response) {
         ResponseCookie cookie = ResponseCookie.from("tapecloud_token", "")
                 .httpOnly(true)
-                .secure(false)
-                .sameSite("Lax")
+                .secure(cookieSecure)
+                .sameSite(cookieSameSite)
                 .path("/")
                 .maxAge(0)
                 .build();
