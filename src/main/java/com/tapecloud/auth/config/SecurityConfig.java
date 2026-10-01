@@ -53,6 +53,8 @@ public class SecurityConfig {
                                 "/api/auth/verify-email", "/api/auth/resend-code").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/content/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/discover/**").permitAll()
+                        // Búsqueda y perfiles públicos (solo nombre visible + avatar, sin email).
+                        .requestMatchers(HttpMethod.GET, "/api/users/search", "/api/users/*/profile").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/content/sync/tmdb/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/content/sync/lastfm/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/reviews/me/stats").authenticated()
