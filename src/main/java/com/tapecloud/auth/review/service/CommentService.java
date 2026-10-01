@@ -43,6 +43,13 @@ public class CommentService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<CommentResponse> findByReviewPaged(
+            UUID reviewId, String currentUserEmail, org.springframework.data.domain.Pageable pageable) {
+        return commentRepository.findByReviewIdOrderByCreatedAtAsc(reviewId, pageable)
+                .map(comment -> toResponse(comment, currentUserEmail));
+    }
+
     @Transactional
     public CommentResponse createComment(UUID reviewId, CommentRequest request, String userEmail) {
         Review review = reviewRepository.findById(reviewId)

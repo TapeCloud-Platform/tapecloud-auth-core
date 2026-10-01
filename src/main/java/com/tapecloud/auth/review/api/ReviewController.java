@@ -5,8 +5,10 @@ import com.tapecloud.auth.review.dto.ReviewResponse;
 import com.tapecloud.auth.review.dto.ReviewStatsResponse;
 import com.tapecloud.auth.review.service.ReviewService;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -32,21 +34,23 @@ public class ReviewController {
     }
 
     @GetMapping
-    public List<ReviewResponse> list(
+    public Page<ReviewResponse> list(
             @RequestParam(required = false) String sourceApp,
             @RequestParam(required = false) UUID contentId,
-            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Integer limit,
             Authentication authentication
     ) {
-        int max = Math.min(Math.max(limit, 1), 100);
+        int safeSize = (limit != null) ? Math.min(Math.max(limit, 1), 100) : Math.min(Math.max(size, 1), 100);
+        int safePage = Math.max(page, 0);
+        Pageable pageable = PageRequest.of(safePage, safeSize);
         String currentUserEmail = (authentication != null) ? authentication.getName() : null;
         if (contentId != null) {
-            return reviewService.findByContent(contentId, currentUserEmail).stream().limit(max).toList();
+            return reviewService.findByContentPaged(contentId, currentUserEmail, pageable);
         }
-        if (sourceApp != null && !sourceApp.isBlank()) {
-            return reviewService.findBySourceApp(sourceApp, currentUserEmail).stream().limit(max).toList();
-        }
-        return reviewService.findBySourceApp("tapeflix", currentUserEmail).stream().limit(max).toList();
+        String app = (sourceApp != null && !sourceApp.isBlank()) ? sourceApp : "tapeflix";
+        return reviewService.findBySourceAppPaged(app, currentUserEmail, pageable);
     }
 
     @GetMapping("/me/stats")

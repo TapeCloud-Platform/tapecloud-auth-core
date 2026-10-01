@@ -16,10 +16,17 @@ import com.tapecloud.auth.user.entity.AppUser;
 import com.tapecloud.auth.user.repository.AppUserRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -117,16 +124,28 @@ public class ReviewService {
 
     @Transactional(readOnly = true)
     public java.util.List<ReviewResponse> findByContent(UUID contentId, String currentUserEmail) {
-        return reviewRepository.findByContentIdOrderByCreatedAtDesc(contentId).stream()
-                .map(review -> toResponse(review, currentUserEmail))
-                .toList();
+        return toResponseBatch(
+                reviewRepository.findByContentIdOrderByCreatedAtDesc(contentId), currentUserEmail);
     }
 
     @Transactional(readOnly = true)
     public java.util.List<ReviewResponse> findBySourceApp(String sourceApp, String currentUserEmail) {
-        return reviewRepository.findByContentSourceAppOrderByCreatedAtDesc(sourceApp).stream()
-                .map(review -> toResponse(review, currentUserEmail))
-                .toList();
+        return toResponseBatch(
+                reviewRepository.findByContentSourceAppOrderByCreatedAtDesc(sourceApp), currentUserEmail);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ReviewResponse> findByContentPaged(UUID contentId, String currentUserEmail, Pageable pageable) {
+        Page<Review> page = reviewRepository.findByContentIdOrderByCreatedAtDesc(contentId, pageable);
+        List<ReviewResponse> mapped = toResponseBatch(page.getContent(), currentUserEmail);
+        return new org.springframework.data.domain.PageImpl<>(mapped, pageable, page.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ReviewResponse> findBySourceAppPaged(String sourceApp, String currentUserEmail, Pageable pageable) {
+        Page<Review> page = reviewRepository.findByContentSourceAppOrderByCreatedAtDesc(sourceApp, pageable);
+        List<ReviewResponse> mapped = toResponseBatch(page.getContent(), currentUserEmail);
+        return new org.springframework.data.domain.PageImpl<>(mapped, pageable, page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -134,21 +153,19 @@ public class ReviewService {
         long tapebeatReviews = reviewRepository.countByAuthorEmailAndContentSourceApp(userEmail, "tapebeat");
         long tapeflixReviews = reviewRepository.countByAuthorEmailAndContentSourceApp(userEmail, "tapeflix");
 
-        Review mostLiked = null;
-        long mostLikedCount = 0;
-        for (Review review : reviewRepository.findByAuthorEmailOrderByCreatedAtDesc(userEmail)) {
-            long likes = reviewLikeRepository.countByReviewId(review.getId());
-            if (mostLiked == null || likes > mostLikedCount) {
-                mostLiked = review;
-                mostLikedCount = likes;
-            }
+        List<Review> top = reviewRepository.findTopByAuthorEmailOrderByLikesDesc(
+                userEmail, org.springframework.data.domain.PageRequest.of(0, 1));
+        if (top.isEmpty()) {
+            return new ReviewStatsResponse(tapebeatReviews, tapeflixReviews, null, null, 0);
         }
+        Review mostLiked = top.get(0);
+        long mostLikedCount = reviewLikeRepository.countByReviewId(mostLiked.getId());
 
         return new ReviewStatsResponse(
                 tapebeatReviews,
                 tapeflixReviews,
-                mostLiked != null ? mostLiked.getTitle() : null,
-                mostLiked != null ? mostLiked.getContent().getSourceApp() : null,
+                mostLiked.getTitle(),
+                mostLiked.getContent().getSourceApp(),
                 mostLikedCount
         );
     }
@@ -169,17 +186,32 @@ public class ReviewService {
     }
 
     private ReviewResponse toResponse(Review review, String currentUserEmail) {
-        long likesCount = reviewLikeRepository.countByReviewId(review.getId());
-        long commentsCount = commentRepository.countByReviewId(review.getId());
-        boolean likedByCurrentUser = currentUserEmail != null &&
-                !currentUserEmail.isBlank() &&
-                reviewLikeRepository.existsByReviewIdAndUserEmailIgnoreCase(review.getId(), currentUserEmail);
+        List<ReviewResponse> batch = toResponseBatch(List.of(review), currentUserEmail);
+        return batch.get(0);
+    }
 
-        boolean ownedByCurrentUser = currentUserEmail != null &&
-                !currentUserEmail.isBlank() &&
-                review.getAuthorEmail().equalsIgnoreCase(currentUserEmail);
+    private List<ReviewResponse> toResponseBatch(List<Review> reviews, String currentUserEmail) {
+        if (reviews.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = reviews.stream().map(Review::getId).toList();
 
-        return new ReviewResponse(
+        Map<UUID, Long> likes = new HashMap<>();
+        for (Object[] row : reviewLikeRepository.countGroupedByReviewIds(ids)) {
+            likes.put((UUID) row[0], (Long) row[1]);
+        }
+        Map<UUID, Long> comments = new HashMap<>();
+        for (Object[] row : commentRepository.countGroupedByReviewIds(ids)) {
+            comments.put((UUID) row[0], (Long) row[1]);
+        }
+        Set<UUID> likedIds = Collections.emptySet();
+        if (currentUserEmail != null && !currentUserEmail.isBlank()) {
+            likedIds = new HashSet<>(reviewLikeRepository.findLikedIdsByUser(ids, currentUserEmail));
+        }
+        boolean hasUser = currentUserEmail != null && !currentUserEmail.isBlank();
+
+        Set<UUID> finalLikedIds = likedIds;
+        return reviews.stream().map(review -> new ReviewResponse(
                 review.getId(),
                 review.getContent().getId(),
                 review.getContent().getTitle(),
@@ -191,14 +223,14 @@ public class ReviewService {
                 review.getBody(),
                 review.getRating(),
                 review.getIsSpoiler() != null ? review.getIsSpoiler() : Boolean.FALSE,
-                likesCount,
-                commentsCount,
-                likedByCurrentUser,
-                ownedByCurrentUser,
+                likes.getOrDefault(review.getId(), 0L),
+                comments.getOrDefault(review.getId(), 0L),
+                hasUser && finalLikedIds.contains(review.getId()),
+                hasUser && review.getAuthorEmail().equalsIgnoreCase(currentUserEmail),
                 review.getCreatedAt(),
                 review.getUpdatedAt(),
                 review.getLastEditedAt()
-        );
+        )).toList();
     }
 
     /**

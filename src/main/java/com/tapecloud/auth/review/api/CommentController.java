@@ -30,9 +30,15 @@ public class CommentController {
     }
 
     @GetMapping
-    public List<CommentResponse> list(@RequestParam UUID reviewId, Authentication authentication) {
+    public org.springframework.data.domain.Page<CommentResponse> list(
+            @RequestParam UUID reviewId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
         String currentUserEmail = (authentication != null) ? authentication.getName() : null;
-        return commentService.findByReview(reviewId, currentUserEmail);
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        return commentService.findByReviewPaged(reviewId, currentUserEmail, pageable);
     }
 
     @PostMapping("/review/{reviewId}")
