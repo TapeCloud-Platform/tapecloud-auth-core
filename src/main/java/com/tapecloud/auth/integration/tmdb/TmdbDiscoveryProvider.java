@@ -49,12 +49,16 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
                 new DiscoveryFilter("genre", "Género", false, genreOptions()),
                 new DiscoveryFilter("country", "País", false, COUNTRIES),
                 new DiscoveryFilter("artist", "Actor / Director", true, List.of()),
+                new DiscoveryFilter("people", "Personas", true, List.of()),
                 new DiscoveryFilter("search", "Buscar película", true, List.of())
         );
     }
 
     @Override
     public List<DiscoveryItem> discover(String type, String value, int limit) {
+        if ("people".equals(type)) {
+            return people(requireValue(value, "persona"), limit);
+        }
         TmdbMoviePageResponse response = switch (type) {
             case "top" -> tmdbClient.discoverMovies(null, null, 1);
             case "genre" -> tmdbClient.discoverMovies("with_genres", requireValue(value, "género"), 1);
@@ -82,6 +86,26 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
         }
         Long personId = people.results().get(0).id();
         return tmdbClient.discoverMovies("with_people", String.valueOf(personId), 1);
+    }
+
+    /** Búsqueda directa de personas (actores/directores) para el header: devuelve perfiles, no películas. */
+    private List<DiscoveryItem> people(String query, int limit) {
+        TmdbPersonSearchResponse response = tmdbClient.searchPerson(query);
+        if (response == null || response.results() == null) {
+            return List.of();
+        }
+        return response.results().stream()
+                .filter(p -> p.name() != null && !p.name().isBlank())
+                .limit(limit)
+                .map(p -> new DiscoveryItem(
+                        "person:" + p.id(),
+                        p.name(),
+                        p.knownForDepartment() != null ? p.knownForDepartment() : "Persona",
+                        p.knownForDepartment() != null ? p.knownForDepartment() : "Persona",
+                        tmdbClient.posterUrl(p.profilePath()),
+                        p.name(),
+                        "person"))
+                .toList();
     }
 
     private DiscoveryItem toItem(TmdbMovieDto movie, Map<Integer, String> genres) {

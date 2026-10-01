@@ -9,6 +9,10 @@ public record TmdbPersonSearchResponse(
 ) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record TmdbPersonDto(Long id, String name) {
+    public record TmdbPersonDto(
+            Long id,
+            String name,
+            @com.fasterxml.jackson.annotation.JsonProperty("profile_path") String profilePath,
+            @com.fasterxml.jackson.annotation.JsonProperty("known_for_department") String knownForDepartment) {
     }
 }

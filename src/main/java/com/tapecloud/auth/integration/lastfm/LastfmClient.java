@@ -1,6 +1,7 @@
 package com.tapecloud.auth.integration.lastfm;
 
 import com.tapecloud.auth.integration.lastfm.dto.LastfmAlbumInfoResponse;
+import com.tapecloud.auth.integration.lastfm.dto.LastfmAlbumSearchResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmArtistInfoResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmArtistSearchResponse;
 import com.tapecloud.auth.integration.lastfm.dto.LastfmChartResponse;
@@ -138,6 +139,21 @@ public class LastfmClient {
                 .toUri();
 
         return restClient.get().uri(uri).retrieve().body(LastfmArtistSearchResponse.class);
+    }
+
+    /** album.search para el header: encuentra discos por título aunque el texto sea parcial. */
+    public LastfmAlbumSearchResponse searchAlbums(String query, int limit) {
+        requireApiKey();
+
+        URI uri = baseBuilder()
+                .queryParam("method", "album.search")
+                .queryParam("album", query)
+                .queryParam("limit", limit)
+                .encode()
+                .build()
+                .toUri();
+
+        return restClient.get().uri(uri).retrieve().body(LastfmAlbumSearchResponse.class);
     }
 
     public LastfmArtistInfoResponse fetchArtistInfo(String artist) {

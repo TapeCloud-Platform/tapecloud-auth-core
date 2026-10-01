@@ -101,6 +101,7 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
                 new DiscoveryFilter("genre", "Género", true, GENRES),
                 new DiscoveryFilter("country", "País", false, COUNTRIES),
                 new DiscoveryFilter("artist", "Artista", true, List.of()),
+                new DiscoveryFilter("album", "Álbum", true, List.of()),
                 new DiscoveryFilter("search", "Todo", true, List.of())
         );
     }
@@ -109,6 +110,9 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
     public List<DiscoveryItem> discover(String type, String value, int limit) {
         if ("search".equals(type) || "artist".equals(type)) {
             return unifiedSearch(requireValue(value, "búsqueda"), limit);
+        }
+        if ("album".equals(type)) {
+            return albumMatches(requireValue(value, "álbum"), limit);
         }
         if ("discography".equals(type)) {
             return discographyItems(requireValue(value, "artista"), limit);
@@ -133,6 +137,41 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
         List<DiscoveryItem> tracks = trackMatches(query, limit);
 
         return java.util.stream.Stream.concat(artists.stream(), tracks.stream()).toList();
+    }
+
+    /** Búsqueda directa de álbumes para el header: devuelve discos con portada y artista. */
+    private List<DiscoveryItem> albumMatches(String query, int limit) {
+        List<com.tapecloud.auth.integration.lastfm.dto.LastfmAlbumSearchResponse.AlbumMatch> matches;
+        try {
+            matches = lastfmClient.searchAlbums(query, Math.max(limit, 10)).albumList();
+        } catch (Exception e) {
+            return List.of();
+        }
+        return matches.stream()
+                .filter(m -> m.name() != null && !m.name().isBlank())
+                .limit(limit)
+                .map(m -> new DiscoveryItem(
+                        "album:" + (m.artist() != null ? m.artist() : "") + ":" + m.name(),
+                        m.name(),
+                        m.artist() != null ? m.artist() : "Álbum",
+                        m.listeners() != null ? "%s oyentes".formatted(m.listeners()) : (m.artist() != null ? m.artist() : "Álbum"),
+                        largestAlbumImage(m.image()),
+                        m.artist() != null ? m.artist() : "Álbum",
+                        "album"))
+                .toList();
+    }
+
+    private static String largestAlbumImage(List<com.tapecloud.auth.integration.lastfm.dto.LastfmAlbumSearchResponse.LastfmImage> images) {
+        if (images == null || images.isEmpty()) {
+            return null;
+        }
+        String candidate = null;
+        for (var img : images) {
+            if (img.text() != null && !img.text().isBlank()) {
+                candidate = img.text();
+            }
+        }
+        return candidate;
     }
 
     private List<DiscoveryItem> trackMatches(String query, int limit) {
