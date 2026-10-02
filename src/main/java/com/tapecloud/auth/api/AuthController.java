@@ -44,10 +44,10 @@ public class AuthController {
     private final RegisterRateLimiter registerRateLimiter;
     private final EmailCodeRateLimiter emailCodeRateLimiter;
 
-    @org.springframework.beans.factory.annotation.Value("${app.auth.cookie-secure:false}")
+    @org.springframework.beans.factory.annotation.Value("${app.auth.cookie-secure:true}")
     private boolean cookieSecure;
 
-    @org.springframework.beans.factory.annotation.Value("${app.auth.cookie-samesite:Lax}")
+    @org.springframework.beans.factory.annotation.Value("${app.auth.cookie-samesite:None}")
     private String cookieSameSite;
 
     public AuthController(AuthService authService, RegisterRateLimiter registerRateLimiter,
