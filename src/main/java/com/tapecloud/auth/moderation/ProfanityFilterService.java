@@ -6,13 +6,14 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -40,7 +41,22 @@ public class ProfanityFilterService {
     private static final Logger log = LoggerFactory.getLogger(ProfanityFilterService.class);
 
     private final ProfanityProperties properties;
-    private final List<Pattern> patterns = new ArrayList<>();
+
+    // Aho-Corasick sobre las entradas colapsadas: un solo pase lineal por
+    // texto en vez de un regex por palabra (con 200k entradas, el loop de
+    // Pattern por request es inviable). La semantica es la misma que antes:
+    // coincidencia con limites de palabra [\p{L}\p{N}_] a ambos lados.
+    private final List<String> entries = new ArrayList<>();
+    private int[] fail = new int[0];
+    private int[] childHead = new int[0];
+    private char[] edgeChar = new char[0];
+    private int[] edgeTo = new int[0];
+    private int[] edgeNext = new int[0];
+    private int[] outHead = new int[0];
+    private int[] outNext = new int[0];
+    private boolean[] hasOut = new boolean[0];
+    private int nodeCount;
+    private int edgeCount;
     private int wordCount = 0;
 
     public ProfanityFilterService(ProfanityProperties properties) {
@@ -79,14 +95,141 @@ public class ProfanityFilterService {
                     .forEach(words::add);
         }
 
+        Set<String> entrySet = new LinkedHashSet<>();
         for (String word : words) {
-            // Límites de palabra a ambos lados (unicode) para evitar falsos positivos.
-            patterns.add(Pattern.compile(
-                    "(?<![\\p{L}\\p{N}_])" + Pattern.quote(word) + "(?![\\p{L}\\p{N}_])",
-                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS));
+            // Se normaliza igual que el texto chequeado (leet incluido): las
+            // variantes que colapsan a la misma base son redundantes.
+            String collapsed = normalize(word);
+            if (collapsed.isEmpty() || !hasAlnum(collapsed)) {
+                continue;
+            }
+            if (FALSE_POSITIVES.contains(collapsed)) {
+                continue;
+            }
+            if (entrySet.add(collapsed)) {
+                entries.add(collapsed);
+            }
         }
-        wordCount = words.size();
+        buildAutomaton();
+        wordCount = entries.size();
         log.info("Filtro de lenguaje cargado con {} palabras (enabled={})", wordCount, properties.isEnabled());
+    }
+
+    private static final Set<String> FALSE_POSITIVES = Set.of(
+            "john", "member", "members", "nuts", "bear", "bears", "rack", "rod");
+
+    private static boolean hasAlnum(String word) {
+        for (int i = 0; i < word.length(); i++) {
+            char c = word.charAt(i);
+            if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Construye el trie Aho-Corasick con arreglos compactos (sin HashMap por nodo). */
+    private void buildAutomaton() {
+        int totalChars = 0;
+        for (String word : entries) {
+            totalChars += word.length();
+        }
+        int maxNodes = 1 + totalChars;
+        fail = new int[maxNodes];
+        childHead = new int[maxNodes];
+        outHead = new int[maxNodes];
+        hasOut = new boolean[maxNodes];
+        Arrays.fill(childHead, -1);
+        Arrays.fill(outHead, -1);
+        edgeChar = new char[totalChars + 1];
+        edgeTo = new int[totalChars + 1];
+        edgeNext = new int[totalChars + 1];
+        outNext = new int[Math.max(1, entries.size())];
+        nodeCount = 1;
+        edgeCount = 0;
+
+        for (int id = 0; id < entries.size(); id++) {
+            String word = entries.get(id);
+            int node = 0;
+            for (int i = 0; i < word.length(); i++) {
+                node = insertEdge(node, word.charAt(i));
+            }
+            outNext[id] = outHead[node];
+            outHead[node] = id;
+            hasOut[node] = true;
+        }
+
+        Deque<Integer> queue = new ArrayDeque<>();
+        for (int e = childHead[0]; e != -1; e = edgeNext[e]) {
+            int child = edgeTo[e];
+            fail[child] = 0;
+            queue.add(child);
+        }
+        while (!queue.isEmpty()) {
+            int node = queue.removeFirst();
+            if (hasOut[fail[node]]) {
+                hasOut[node] = true;
+            }
+            for (int e = childHead[node]; e != -1; e = edgeNext[e]) {
+                int child = edgeTo[e];
+                int fallback = fail[node];
+                int next;
+                while (fallback != 0 && (next = findEdge(fallback, edgeChar[e])) == -1) {
+                    fallback = fail[fallback];
+                }
+                next = findEdge(fallback, edgeChar[e]);
+                fail[child] = (next == -1) ? 0 : next;
+                queue.add(child);
+            }
+        }
+
+        fail = Arrays.copyOf(fail, nodeCount);
+        childHead = Arrays.copyOf(childHead, nodeCount);
+        outHead = Arrays.copyOf(outHead, nodeCount);
+        hasOut = Arrays.copyOf(hasOut, nodeCount);
+        edgeChar = Arrays.copyOf(edgeChar, edgeCount);
+        edgeTo = Arrays.copyOf(edgeTo, edgeCount);
+        edgeNext = Arrays.copyOf(edgeNext, edgeCount);
+    }
+
+    private int insertEdge(int node, char c) {
+        for (int e = childHead[node]; e != -1; e = edgeNext[e]) {
+            if (edgeChar[e] == c) {
+                return edgeTo[e];
+            }
+        }
+        int child = nodeCount++;
+        edgeChar[edgeCount] = c;
+        edgeTo[edgeCount] = child;
+        edgeNext[edgeCount] = childHead[node];
+        childHead[node] = edgeCount;
+        edgeCount++;
+        return child;
+    }
+
+    private int findEdge(int node, char c) {
+        for (int e = childHead[node]; e != -1; e = edgeNext[e]) {
+            if (edgeChar[e] == c) {
+                return edgeTo[e];
+            }
+        }
+        return -1;
+    }
+
+    /** Equivale a [\p{L}\p{N}_] con UNICODE_CHARACTER_CLASS. */
+    private static boolean isWordChar(char c) {
+        if (c == '_') {
+            return true;
+        }
+        int type = Character.getType(c);
+        return type == Character.UPPERCASE_LETTER
+                || type == Character.LOWERCASE_LETTER
+                || type == Character.TITLECASE_LETTER
+                || type == Character.MODIFIER_LETTER
+                || type == Character.OTHER_LETTER
+                || type == Character.DECIMAL_DIGIT_NUMBER
+                || type == Character.LETTER_NUMBER
+                || type == Character.OTHER_NUMBER;
     }
 
     /** Normaliza una línea de los archivos: minúsculas, sin tildes, sin espacios. */
@@ -132,10 +275,30 @@ public class ProfanityFilterService {
             return null;
         }
         String normalized = normalize(text);
-        for (Pattern pattern : patterns) {
-            var matcher = pattern.matcher(normalized);
-            if (matcher.find()) {
-                return matcher.group();
+        int node = 0;
+        for (int i = 0; i < normalized.length(); i++) {
+            char c = normalized.charAt(i);
+            int next;
+            while (node != 0 && (next = findEdge(node, c)) == -1) {
+                node = fail[node];
+            }
+            next = findEdge(node, c);
+            node = (next == -1) ? 0 : next;
+            if (!hasOut[node]) {
+                continue;
+            }
+            for (int t = node; t != 0; t = fail[t]) {
+                for (int id = outHead[t]; id != -1; id = outNext[id]) {
+                    int len = entries.get(id).length();
+                    int start = i - len + 1;
+                    if (start < 0) {
+                        continue;
+                    }
+                    if ((start == 0 || !isWordChar(normalized.charAt(start - 1)))
+                            && (i + 1 == normalized.length() || !isWordChar(normalized.charAt(i + 1)))) {
+                        return normalized.substring(start, i + 1);
+                    }
+                }
             }
         }
         return null;
@@ -174,14 +337,39 @@ public class ProfanityFilterService {
         for (String token : tokenSet) {
             candidates.add(token.replaceAll("^[0-9]+|[0-9]+$", ""));
         }
-        for (Pattern pattern : patterns) {
-            for (String token : candidates) {
-                if (!token.isEmpty() && pattern.matcher(token).matches()) {
-                    throw new IllegalArgumentException(
-                            "Ese nombre de usuario contiene lenguaje no permitido. Elegí otro.");
+        for (String token : candidates) {
+            if (!token.isEmpty() && matchesWhole(token)) {
+                throw new IllegalArgumentException(
+                        "Ese nombre de usuario contiene lenguaje no permitido. Elegí otro.");
+            }
+        }
+    }
+
+    /** Equivale al viejo pattern.matcher(token).matches(): la entrada cubre todo el token. */
+    private boolean matchesWhole(String token) {
+        int node = 0;
+        for (int i = 0; i < token.length(); i++) {
+            char c = token.charAt(i);
+            int next;
+            while (node != 0 && (next = findEdge(node, c)) == -1) {
+                node = fail[node];
+            }
+            next = findEdge(node, c);
+            node = (next == -1) ? 0 : next;
+            if (!hasOut[node]) {
+                continue;
+            }
+            for (int t = node; t != 0; t = fail[t]) {
+                for (int id = outHead[t]; id != -1; id = outNext[id]) {
+                    int len = entries.get(id).length();
+                    int start = i - len + 1;
+                    if (start == 0 && i == token.length() - 1) {
+                        return true;
+                    }
                 }
             }
         }
+        return false;
     }
 
     public int getWordCount() {
