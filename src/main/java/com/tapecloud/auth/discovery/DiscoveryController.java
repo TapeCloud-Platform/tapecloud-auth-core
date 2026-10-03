@@ -35,8 +35,38 @@ public class DiscoveryController {
             @PathVariable String sourceApp,
             @RequestParam(defaultValue = "top") String type,
             @RequestParam(required = false) String value,
+            @RequestParam(required = false) String genre,
+            @RequestParam(required = false) String country,
+            @RequestParam(required = false) String artist,
+            @RequestParam(required = false) String album,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String people,
             @RequestParam(defaultValue = "30") int limit) {
-        return provider(sourceApp).discover(type, value, Math.min(Math.max(limit, 1), MAX_LIMIT));
+        int safeLimit = Math.min(Math.max(limit, 1), MAX_LIMIT);
+        if (genre != null || country != null || artist != null
+                || album != null || search != null || people != null) {
+            Map<String, String> filters = new java.util.LinkedHashMap<>();
+            if (genre != null) {
+                filters.put("genre", genre);
+            }
+            if (country != null) {
+                filters.put("country", country);
+            }
+            if (artist != null) {
+                filters.put("artist", artist);
+            }
+            if (album != null) {
+                filters.put("album", album);
+            }
+            if (search != null) {
+                filters.put("search", search);
+            }
+            if (people != null) {
+                filters.put("people", people);
+            }
+            return provider(sourceApp).discoverCombined(filters, safeLimit);
+        }
+        return provider(sourceApp).discover(type, value, safeLimit);
     }
 
     @GetMapping("/{sourceApp}/profile")

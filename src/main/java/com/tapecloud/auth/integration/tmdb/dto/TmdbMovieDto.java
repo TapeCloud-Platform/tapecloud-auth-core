@@ -11,6 +11,7 @@ public record TmdbMovieDto(
         String overview,
         @JsonProperty("release_date") String releaseDate,
         @JsonProperty("poster_path") String posterPath,
-        @JsonProperty("genre_ids") List<Integer> genreIds
+        @JsonProperty("genre_ids") List<Integer> genreIds,
+        @JsonProperty("origin_country") List<String> originCountries
 ) {
 }

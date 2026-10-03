@@ -10,6 +10,7 @@ import com.tapecloud.auth.integration.tmdb.dto.TmdbMoviePageResponse;
 import com.tapecloud.auth.integration.tmdb.dto.TmdbPersonSearchResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
@@ -59,8 +60,7 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
         if ("people".equals(type)) {
             return people(requireValue(value, "persona"), limit);
         }
-        TmdbMoviePageResponse response = switch (type) {
-            case "top" -> tmdbClient.discoverMovies(null, null, 1);
+        TmdbMoviePageResponse response = switch (type) {            case "top" -> tmdbClient.discoverMovies(null, null, 1);
             case "genre" -> tmdbClient.discoverMovies("with_genres", requireValue(value, "género"), 1);
             case "country" -> tmdbClient.discoverMovies("with_origin_country", requireValue(value, "país"), 1);
             case "artist" -> byPerson(requireValue(value, "actor o director"));
@@ -210,5 +210,133 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Falta el valor de " + label);
         }
         return value;
+    }
+
+    /**
+     * Filtros combinados ("grunge francés"): género + país + persona en un
+     * solo discover/movie; la búsqueda libre filtra por género/país en memoria.
+     */
+    @Override
+    public List<DiscoveryItem> discoverCombined(Map<String, String> filters, int limit) {
+        String genre = blankToNull(filters.get("genre"));
+        String country = blankToNull(filters.get("country"));
+        String artist = blankToNull(firstPresent(filters, "artist", "people"));
+        String search = blankToNull(filters.get("search"));
+
+        if (search != null && genre == null && country == null && artist == null) {
+            return discover("search", search, limit);
+        }
+
+        Map<Integer, String> genres = genreMap();
+        if (search != null) {
+            TmdbMoviePageResponse response = tmdbClient.searchMovies(search, 1);
+            if (response == null || response.results() == null) {
+                return List.of();
+            }
+            java.util.Set<Integer> genreIds = parseGenreIds(genre);
+            return response.results().stream()
+                    .filter(m -> genreIds.isEmpty() || matchesAnyGenre(m, genreIds))
+                    .filter(m -> country == null || matchesCountry(m, country))
+                    .limit(limit)
+                    .map(movie -> toItem(movie, genres))
+                    .toList();
+        }
+
+        Map<String, String> params = new java.util.LinkedHashMap<>();
+        if (genre != null) {
+            params.put("with_genres", genre);
+        }
+        if (country != null) {
+            params.put("with_origin_country", country);
+        }
+        if (artist != null) {
+            String personIds = personIdsOf(artist);
+            if (personIds == null) {
+                return List.of();
+            }
+            params.put("with_people", personIds);
+        }
+        if (params.isEmpty()) {
+            return discover("top", null, limit);
+        }
+        TmdbMoviePageResponse response = tmdbClient.discoverMovies(params, 1);
+        if (response == null || response.results() == null) {
+            return List.of();
+        }
+        return response.results().stream()
+                .limit(limit)
+                .map(movie -> toItem(movie, genres))
+                .toList();
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String firstPresent(Map<String, String> filters, String... keys) {
+        for (String key : keys) {
+            String value = blankToNull(filters.get(key));
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static java.util.Set<Integer> parseGenreIds(String genre) {
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        if (genre == null) {
+            return ids;
+        }
+        for (String part : genre.split("[,|]")) {
+            try {
+                ids.add(Integer.parseInt(part.trim()));
+            } catch (NumberFormatException ignored) {
+                // Un nombre en vez de id simplemente no filtra.
+            }
+        }
+        return ids;
+    }
+
+    private static boolean matchesAnyGenre(TmdbMovieDto movie, java.util.Set<Integer> genreIds) {
+        if (movie.genreIds() == null) {
+            return false;
+        }
+        return movie.genreIds().stream().anyMatch(genreIds::contains);
+    }
+
+    private static boolean matchesCountry(TmdbMovieDto movie, String country) {
+        if (movie.originCountries() == null) {
+            return false;
+        }
+        return movie.originCountries().stream().anyMatch(c -> c.equalsIgnoreCase(country));
+    }
+
+    private Long personIdOf(String name) {
+        try {
+            TmdbPersonSearchResponse people = tmdbClient.searchPerson(name);
+            if (people == null || people.results() == null || people.results().isEmpty()) {
+                return null;
+            }
+            return people.results().get(0).id();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Varios artistas ("brad pitt,tom hanks"): une sus ids con coma (AND de TMDb). */
+    private String personIdsOf(String names) {
+        List<String> ids = new java.util.ArrayList<>();
+        for (String part : names.split("[,|]")) {
+            String name = part.trim();
+            if (name.isEmpty()) {
+                continue;
+            }
+            Long id = personIdOf(name);
+            if (id != null && !ids.contains(String.valueOf(id))) {
+                ids.add(String.valueOf(id));
+            }
+        }
+        return ids.isEmpty() ? null : String.join(",", ids);
     }
 }

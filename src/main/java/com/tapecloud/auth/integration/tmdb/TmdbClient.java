@@ -82,6 +82,28 @@ public class TmdbClient {
                 .body(TmdbMoviePageResponse.class);
     }
 
+    /** discover/movie con varios filtros a la vez (género + país + persona). */
+    public TmdbMoviePageResponse discoverMovies(java.util.Map<String, String> params, int page) {
+        requireApiKey();
+
+        UriComponentsBuilder builder = baseBuilder("/discover/movie")
+                .queryParam("sort_by", "popularity.desc")
+                .queryParam("page", page);
+
+        if (params != null) {
+            params.forEach((key, value) -> {
+                if (value != null && !value.isBlank()) {
+                    builder.queryParam(key, value);
+                }
+            });
+        }
+
+        return restClient.get()
+                .uri(builder.encode().build().toUri())
+                .retrieve()
+                .body(TmdbMoviePageResponse.class);
+    }
+
     public TmdbMoviePageResponse searchMovies(String query, int page) {
         requireApiKey();
 

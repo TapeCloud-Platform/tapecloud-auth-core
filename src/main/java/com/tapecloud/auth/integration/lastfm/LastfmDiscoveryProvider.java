@@ -129,38 +129,73 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
     }
 
     /**
-     * Varios géneros separados por coma ("rock,pop"): se mezclan los tops de
-     * cada tag intercalando y sin repetidos, hasta el límite pedido.
+     * Varios valores separados por coma ("rock,pop"): se mezclan los tops de
+     * cada uno intercalando y sin repetidos, hasta el límite pedido.
      */
     private List<LastfmTrackDto> tracksByTags(String value, int limit) {
-        String[] tags = value.split(",");
-        if (tags.length == 1) {
-            return lastfmClient.fetchTracksByTag(value.trim(), limit).trackList();
-        }
-        List<List<LastfmTrackDto>> perTag = new java.util.ArrayList<>();
-        for (String tag : tags) {
-            String t = tag.trim();
-            if (t.isEmpty()) {
-                continue;
-            }
+        return mergeTrackLists(splitValues(value), tag -> {
             try {
-                perTag.add(lastfmClient.fetchTracksByTag(t, limit).trackList());
+                return lastfmClient.fetchTracksByTag(tag, limit).trackList();
             } catch (Exception ignored) {
-                // Un tag desconocido no arruina los demás.
+                return List.of();
             }
+        }, limit);
+    }
+
+    private List<LastfmTrackDto> tracksByArtists(String value, int limit) {
+        return mergeTrackLists(splitValues(value), artist -> {
+            try {
+                return lastfmClient.fetchTracksByArtist(artist, limit).trackList();
+            } catch (Exception ignored) {
+                return List.of();
+            }
+        }, limit);
+    }
+
+    private List<LastfmTrackDto> tracksByCountries(String value, int limit) {
+        return mergeTrackLists(splitValues(value), country -> {
+            try {
+                return lastfmClient.fetchTracksByCountry(country, limit).trackList();
+            } catch (Exception ignored) {
+                return List.of();
+            }
+        }, limit);
+    }
+
+    private static List<String> splitValues(String value) {
+        List<String> out = new java.util.ArrayList<>();
+        for (String part : value.split("[,|]")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty() && !out.contains(trimmed)) {
+                out.add(trimmed);
+            }
+        }
+        return out;
+    }
+
+    private static List<LastfmTrackDto> mergeTrackLists(
+            List<String> keys,
+            java.util.function.Function<String, List<LastfmTrackDto>> fetcher,
+            int limit) {
+        if (keys.size() == 1) {
+            return fetcher.apply(keys.get(0));
+        }
+        List<List<LastfmTrackDto>> perKey = new java.util.ArrayList<>();
+        for (String key : keys) {
+            perKey.add(fetcher.apply(key));
         }
         List<LastfmTrackDto> merged = new java.util.ArrayList<>();
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
         boolean more = true;
         for (int i = 0; more && merged.size() < limit; i++) {
             more = false;
-            for (List<LastfmTrackDto> list : perTag) {
+            for (List<LastfmTrackDto> list : perKey) {
                 if (i < list.size()) {
                     more = true;
                     LastfmTrackDto track = list.get(i);
                     String artist = track.artist() != null ? track.artist().name() : "";
-                    String key = artist + "|" + track.name();
-                    if (seen.add(key)) {
+                    String trackKey = artist + "|" + track.name();
+                    if (seen.add(trackKey)) {
                         merged.add(track);
                         if (merged.size() >= limit) {
                             break;
@@ -170,6 +205,74 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
             }
         }
         return merged;
+    }
+
+    /**
+     * Filtros combinados ("grunge australiano"): artista manda; si no,
+     * álbum; si no, género intersectado con país por artista+título.
+     */
+    @Override
+    public List<DiscoveryItem> discoverCombined(Map<String, String> filters, int limit) {
+        String genre = blankToNull(filters.get("genre"));
+        String country = blankToNull(filters.get("country"));
+        String artist = blankToNull(filters.get("artist"));
+        String album = blankToNull(filters.get("album"));
+        String search = blankToNull(filters.get("search"));
+
+        if (search != null && genre == null && country == null && artist == null && album == null) {
+            return unifiedSearch(search, limit);
+        }
+        if (artist != null) {
+            List<DiscoveryItem> tracks = trackItems(tracksByArtists(artist, limit));
+            if (tracks.isEmpty()) {
+                tracks = searchItems(artist, limit);
+            }
+            if (genre != null) {
+                tracks = intersectByExternalId(tracks, byTagItems(genre, limit));
+            }
+            return tracks.stream().limit(limit).toList();
+        }
+        if (album != null) {
+            return albumMatches(album, limit);
+        }
+        if (genre == null && country == null) {
+            return discover("top", null, limit);
+        }
+        List<DiscoveryItem> base = genre != null
+                ? byTagItems(genre, limit * 2)
+                : trackItems(tracksByCountries(country, limit * 2));
+        if (genre != null && country != null) {
+            base = intersectByExternalId(base, trackItems(tracksByCountries(country, limit * 2)));
+        }
+        return base.stream().limit(limit).toList();
+    }
+
+    private List<DiscoveryItem> byTagItems(String genre, int limit) {
+        List<LastfmTrackDto> tracks = tracksByTags(requireValue(genre, "género"), limit);
+        return enrich(tracks);
+    }
+
+    private List<DiscoveryItem> trackItems(List<LastfmTrackDto> tracks) {
+        return enrich(tracks);
+    }
+
+    private static List<DiscoveryItem> intersectByExternalId(List<DiscoveryItem> a, List<DiscoveryItem> b) {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (DiscoveryItem item : b) {
+            ids.add(item.externalId());
+        }
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        List<DiscoveryItem> out = new java.util.ArrayList<>();
+        for (DiscoveryItem item : a) {
+            if (ids.contains(item.externalId()) && seen.add(item.externalId())) {
+                out.add(item);
+            }
+        }
+        return out;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     /**

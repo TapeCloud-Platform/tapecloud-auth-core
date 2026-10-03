@@ -16,6 +16,14 @@ public interface DiscoveryProvider {
 
     List<DiscoveryItem> discover(String type, String value, int limit);
 
+    /**
+     * Búsqueda facetada: combina etiquetas (genre, country, artist, album,
+     * search, people) en una sola consulta. Sin filtros, equivale a top.
+     */
+    default List<DiscoveryItem> discoverCombined(java.util.Map<String, String> filters, int limit) {
+        return discover("top", null, limit);
+    }
+
     default DiscoveryProfile profile(String name) {
         throw new ResponseStatusException(
                 HttpStatus.NOT_IMPLEMENTED, "%s no expone perfiles".formatted(sourceApp()));
