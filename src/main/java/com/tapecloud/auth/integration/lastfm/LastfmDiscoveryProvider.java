@@ -65,7 +65,48 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
             new DiscoveryFilterOption("cumbia", "Cumbia"),
             new DiscoveryFilterOption("vaporwave", "Vaporwave"),
             new DiscoveryFilterOption("math rock", "Math Rock"),
-            new DiscoveryFilterOption("city pop", "City Pop")
+            new DiscoveryFilterOption("city pop", "City Pop"),
+            new DiscoveryFilterOption("grunge", "Grunge"),
+            new DiscoveryFilterOption("alternative", "Alternative"),
+            new DiscoveryFilterOption("alternative rock", "Alternative Rock"),
+            new DiscoveryFilterOption("classic rock", "Classic Rock"),
+            new DiscoveryFilterOption("hard rock", "Hard Rock"),
+            new DiscoveryFilterOption("progressive rock", "Progressive Rock"),
+            new DiscoveryFilterOption("heavy metal", "Heavy Metal"),
+            new DiscoveryFilterOption("black metal", "Black Metal"),
+            new DiscoveryFilterOption("death metal", "Death Metal"),
+            new DiscoveryFilterOption("hardcore", "Hardcore"),
+            new DiscoveryFilterOption("emo", "Emo"),
+            new DiscoveryFilterOption("ska", "Ska"),
+            new DiscoveryFilterOption("reggae", "Reggae"),
+            new DiscoveryFilterOption("dub", "Dub"),
+            new DiscoveryFilterOption("funk", "Funk"),
+            new DiscoveryFilterOption("soul", "Soul"),
+            new DiscoveryFilterOption("r&b", "R&B"),
+            new DiscoveryFilterOption("blues", "Blues"),
+            new DiscoveryFilterOption("country", "Country"),
+            new DiscoveryFilterOption("latin", "Latin"),
+            new DiscoveryFilterOption("salsa", "Salsa"),
+            new DiscoveryFilterOption("bachata", "Bachata"),
+            new DiscoveryFilterOption("tango", "Tango"),
+            new DiscoveryFilterOption("flamenco", "Flamenco"),
+            new DiscoveryFilterOption("samba", "Samba"),
+            new DiscoveryFilterOption("k-pop", "K-Pop"),
+            new DiscoveryFilterOption("j-pop", "J-Pop"),
+            new DiscoveryFilterOption("trap", "Trap"),
+            new DiscoveryFilterOption("drill", "Drill"),
+            new DiscoveryFilterOption("house", "House"),
+            new DiscoveryFilterOption("techno", "Techno"),
+            new DiscoveryFilterOption("trance", "Trance"),
+            new DiscoveryFilterOption("disco", "Disco"),
+            new DiscoveryFilterOption("classical", "Clásica"),
+            new DiscoveryFilterOption("soundtrack", "Soundtrack"),
+            new DiscoveryFilterOption("new wave", "New Wave"),
+            new DiscoveryFilterOption("post-punk", "Post-Punk"),
+            new DiscoveryFilterOption("post-rock", "Post-Rock"),
+            new DiscoveryFilterOption("dream pop", "Dream Pop"),
+            new DiscoveryFilterOption("synthwave", "Synthwave"),
+            new DiscoveryFilterOption("lo-fi", "Lo-Fi")
     );
 
     private static final List<DiscoveryFilterOption> COUNTRIES = List.of(
@@ -77,7 +118,18 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
             new DiscoveryFilterOption("united kingdom", "Reino Unido"),
             new DiscoveryFilterOption("japan", "Japón"),
             new DiscoveryFilterOption("germany", "Alemania"),
-            new DiscoveryFilterOption("france", "Francia")
+            new DiscoveryFilterOption("france", "Francia"),
+            new DiscoveryFilterOption("australia", "Australia"),
+            new DiscoveryFilterOption("italy", "Italia"),
+            new DiscoveryFilterOption("canada", "Canadá"),
+            new DiscoveryFilterOption("colombia", "Colombia"),
+            new DiscoveryFilterOption("chile", "Chile"),
+            new DiscoveryFilterOption("uruguay", "Uruguay"),
+            new DiscoveryFilterOption("netherlands", "Países Bajos"),
+            new DiscoveryFilterOption("sweden", "Suecia"),
+            new DiscoveryFilterOption("norway", "Noruega"),
+            new DiscoveryFilterOption("south korea", "Corea del Sur"),
+            new DiscoveryFilterOption("india", "India")
     );
 
     private final LastfmClient lastfmClient;
@@ -99,7 +151,7 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
         return List.of(
                 new DiscoveryFilter("top", "Más escuchadas", false, List.of()),
                 new DiscoveryFilter("genre", "Género", true, GENRES),
-                new DiscoveryFilter("country", "País", false, COUNTRIES),
+                new DiscoveryFilter("country", "País", true, COUNTRIES),
                 new DiscoveryFilter("artist", "Artista", true, List.of()),
                 new DiscoveryFilter("album", "Álbum", true, List.of()),
                 new DiscoveryFilter("search", "Todo", true, List.of())

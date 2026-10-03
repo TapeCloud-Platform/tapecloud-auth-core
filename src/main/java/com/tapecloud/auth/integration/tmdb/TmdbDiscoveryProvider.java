@@ -29,7 +29,18 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
             new DiscoveryFilterOption("GB", "Reino Unido"),
             new DiscoveryFilterOption("JP", "Japón"),
             new DiscoveryFilterOption("KR", "Corea del Sur"),
-            new DiscoveryFilterOption("FR", "Francia")
+            new DiscoveryFilterOption("FR", "Francia"),
+            new DiscoveryFilterOption("AU", "Australia"),
+            new DiscoveryFilterOption("DE", "Alemania"),
+            new DiscoveryFilterOption("IT", "Italia"),
+            new DiscoveryFilterOption("CA", "Canadá"),
+            new DiscoveryFilterOption("CO", "Colombia"),
+            new DiscoveryFilterOption("CL", "Chile"),
+            new DiscoveryFilterOption("UY", "Uruguay"),
+            new DiscoveryFilterOption("NL", "Países Bajos"),
+            new DiscoveryFilterOption("SE", "Suecia"),
+            new DiscoveryFilterOption("NO", "Noruega"),
+            new DiscoveryFilterOption("IN", "India")
     );
 
     private final TmdbClient tmdbClient;
@@ -47,8 +58,8 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
     public List<DiscoveryFilter> availableFilters() {
         return List.of(
                 new DiscoveryFilter("top", "Más populares", false, List.of()),
-                new DiscoveryFilter("genre", "Género", false, genreOptions()),
-                new DiscoveryFilter("country", "País", false, COUNTRIES),
+                new DiscoveryFilter("genre", "Género", true, genreOptions()),
+                new DiscoveryFilter("country", "País", true, COUNTRIES),
                 new DiscoveryFilter("artist", "Actor / Director", true, List.of()),
                 new DiscoveryFilter("people", "Personas", true, List.of()),
                 new DiscoveryFilter("search", "Buscar película", true, List.of())
@@ -60,9 +71,13 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
         if ("people".equals(type)) {
             return people(requireValue(value, "persona"), limit);
         }
-        TmdbMoviePageResponse response = switch (type) {            case "top" -> tmdbClient.discoverMovies(null, null, 1);
-            case "genre" -> tmdbClient.discoverMovies("with_genres", requireValue(value, "género"), 1);
-            case "country" -> tmdbClient.discoverMovies("with_origin_country", requireValue(value, "país"), 1);
+        Map<Integer, String> genres = genreMap();
+        TmdbMoviePageResponse response = switch (type) {
+            case "top" -> tmdbClient.discoverMovies(null, null, 1);
+            case "genre" -> tmdbClient.discoverMovies(
+                    "with_genres", resolveGenreIds(requireValue(value, "género"), genres), 1);
+            case "country" -> tmdbClient.discoverMovies(
+                    "with_origin_country", resolveCountryCodes(requireValue(value, "país")), 1);
             case "artist" -> byPerson(requireValue(value, "actor o director"));
             case "search" -> tmdbClient.searchMovies(requireValue(value, "búsqueda"), 1);
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Filtro no soportado: " + type);
@@ -72,7 +87,6 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
             return List.of();
         }
 
-        Map<Integer, String> genres = genreMap();
         return response.results().stream()
                 .limit(limit)
                 .map(movie -> toItem(movie, genres))
@@ -233,10 +247,25 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
             if (response == null || response.results() == null) {
                 return List.of();
             }
-            java.util.Set<Integer> genreIds = parseGenreIds(genre);
+            java.util.Set<Integer> genreIds = new java.util.HashSet<>();
+            for (String part : resolveGenreIds(genre, genres).split(",")) {
+                try {
+                    genreIds.add(Integer.parseInt(part.trim()));
+                } catch (NumberFormatException ignored) {
+                    // Ya resuelto arriba; no debería pasar.
+                }
+            }
+            java.util.Set<String> countryCodes = new java.util.HashSet<>();
+            if (country != null) {
+                for (String part : resolveCountryCodes(country).split("\\|")) {
+                    if (!part.isBlank()) {
+                        countryCodes.add(part.trim().toUpperCase(java.util.Locale.ROOT));
+                    }
+                }
+            }
             return response.results().stream()
                     .filter(m -> genreIds.isEmpty() || matchesAnyGenre(m, genreIds))
-                    .filter(m -> country == null || matchesCountry(m, country))
+                    .filter(m -> countryCodes.isEmpty() || matchesAnyCountry(m, countryCodes))
                     .limit(limit)
                     .map(movie -> toItem(movie, genres))
                     .toList();
@@ -244,10 +273,10 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
 
         Map<String, String> params = new java.util.LinkedHashMap<>();
         if (genre != null) {
-            params.put("with_genres", genre);
+            params.put("with_genres", resolveGenreIds(genre, genres));
         }
         if (country != null) {
-            params.put("with_origin_country", country);
+            params.put("with_origin_country", resolveCountryCodes(country));
         }
         if (artist != null) {
             String personIds = personIdsOf(artist);
@@ -298,11 +327,101 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
         return ids;
     }
 
+    /**
+     * Acepta ids ("28", "28,12") o nombres ("Acción", "ciencia ficción"):
+     * los nombres se resuelven a su id de TMDb insensible a mayúsculas/tildes.
+     */
+    private static String resolveGenreIds(String value, Map<Integer, String> genres) {
+        Map<String, Integer> byName = new java.util.HashMap<>();
+        for (Map.Entry<Integer, String> entry : genres.entrySet()) {
+            byName.put(normalize(entry.getValue()), entry.getKey());
+        }
+        List<String> ids = new java.util.ArrayList<>();
+        for (String part : value.split("[,|]")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty() || ids.contains(trimmed)) {
+                continue;
+            }
+            try {
+                Integer.parseInt(trimmed);
+                if (!ids.contains(trimmed)) {
+                    ids.add(trimmed);
+                }
+                continue;
+            } catch (NumberFormatException ignored) {
+                // Es un nombre: se resuelve abajo.
+            }
+            Integer id = byName.get(normalize(trimmed));
+            if (id != null && !ids.contains(String.valueOf(id))) {
+                ids.add(String.valueOf(id));
+            }
+        }
+        return String.join(",", ids);
+    }
+
+    /**
+     * Acepta códigos ISO ("AU", "AU|FR") o nombres ("Australia"):
+     * los nombres se resuelven a su código insensible a mayúsculas/tildes.
+     */
+    private static String resolveCountryCodes(String value) {
+        Map<String, String> byName = new java.util.HashMap<>();
+        for (DiscoveryFilterOption option : COUNTRIES) {
+            byName.put(normalize(option.label()), option.value());
+        }
+        // Aliases en inglés frecuentes además del label en español.
+        byName.putIfAbsent("australia", "AU");
+        byName.putIfAbsent("france", "FR");
+        byName.putIfAbsent("germany", "DE");
+        byName.putIfAbsent("italy", "IT");
+        byName.putIfAbsent("canada", "CA");
+        byName.putIfAbsent("united states", "US");
+        byName.putIfAbsent("united kingdom", "GB");
+        byName.putIfAbsent("usa", "US");
+        byName.putIfAbsent("uk", "GB");
+        byName.putIfAbsent("japan", "JP");
+        byName.putIfAbsent("south korea", "KR");
+        byName.putIfAbsent("korea", "KR");
+        List<String> codes = new java.util.ArrayList<>();
+        for (String part : value.split("[,|]")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            if (trimmed.length() == 2 && trimmed.chars().allMatch(Character::isLetter)) {
+                String code = trimmed.toUpperCase(java.util.Locale.ROOT);
+                if (!codes.contains(code)) {
+                    codes.add(code);
+                }
+                continue;
+            }
+            String code = byName.get(normalize(trimmed));
+            if (code != null && !codes.contains(code)) {
+                codes.add(code);
+            }
+        }
+        return String.join("|", codes);
+    }
+
+    private static String normalize(String text) {
+        String lower = text.toLowerCase(java.util.Locale.ROOT);
+        String decomposed = java.text.Normalizer.normalize(lower, java.text.Normalizer.Form.NFD);
+        return decomposed.replaceAll("\\p{M}", "");
+    }
+
     private static boolean matchesAnyGenre(TmdbMovieDto movie, java.util.Set<Integer> genreIds) {
         if (movie.genreIds() == null) {
             return false;
         }
         return movie.genreIds().stream().anyMatch(genreIds::contains);
+    }
+
+    private static boolean matchesAnyCountry(TmdbMovieDto movie, java.util.Set<String> countryCodes) {
+        if (movie.originCountries() == null) {
+            return false;
+        }
+        return movie.originCountries().stream()
+                .map(c -> c.toUpperCase(java.util.Locale.ROOT))
+                .anyMatch(countryCodes::contains);
     }
 
     private static boolean matchesCountry(TmdbMovieDto movie, String country) {
