@@ -120,12 +120,56 @@ public class LastfmDiscoveryProvider implements DiscoveryProvider {
 
         List<LastfmTrackDto> tracks = switch (type) {
             case "top" -> lastfmClient.fetchTopTracks(1, limit).trackList();
-            case "genre" -> lastfmClient.fetchTracksByTag(requireValue(value, "género"), limit).trackList();
+            case "genre" -> tracksByTags(requireValue(value, "género"), limit);
             case "country" -> lastfmClient.fetchTracksByCountry(requireValue(value, "país"), limit).trackList();
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Filtro no soportado: " + type);
         };
 
         return enrich(tracks);
+    }
+
+    /**
+     * Varios géneros separados por coma ("rock,pop"): se mezclan los tops de
+     * cada tag intercalando y sin repetidos, hasta el límite pedido.
+     */
+    private List<LastfmTrackDto> tracksByTags(String value, int limit) {
+        String[] tags = value.split(",");
+        if (tags.length == 1) {
+            return lastfmClient.fetchTracksByTag(value.trim(), limit).trackList();
+        }
+        List<List<LastfmTrackDto>> perTag = new java.util.ArrayList<>();
+        for (String tag : tags) {
+            String t = tag.trim();
+            if (t.isEmpty()) {
+                continue;
+            }
+            try {
+                perTag.add(lastfmClient.fetchTracksByTag(t, limit).trackList());
+            } catch (Exception ignored) {
+                // Un tag desconocido no arruina los demás.
+            }
+        }
+        List<LastfmTrackDto> merged = new java.util.ArrayList<>();
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        boolean more = true;
+        for (int i = 0; more && merged.size() < limit; i++) {
+            more = false;
+            for (List<LastfmTrackDto> list : perTag) {
+                if (i < list.size()) {
+                    more = true;
+                    LastfmTrackDto track = list.get(i);
+                    String artist = track.artist() != null ? track.artist().name() : "";
+                    String key = artist + "|" + track.name();
+                    if (seen.add(key)) {
+                        merged.add(track);
+                        if (merged.size() >= limit) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return merged;
     }
 
     /**
