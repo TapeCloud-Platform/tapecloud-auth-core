@@ -189,7 +189,8 @@ public class TmdbDiscoveryProvider implements DiscoveryProvider {
                 movie.releaseDate(),
                 movie.overview(),
                 tmdbClient.posterUrl(movie.posterPath()),
-                genre
+                genre,
+                "movie"
         );
     }
 
