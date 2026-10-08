@@ -46,7 +46,10 @@ public class ProfanityFilterService {
     // texto en vez de un regex por palabra (con 200k entradas, el loop de
     // Pattern por request es inviable). La semantica es la misma que antes:
     // coincidencia con limites de palabra [\p{L}\p{N}_] a ambos lados.
+    // Las palabras permitidas (allow-words-*.txt, español común como "con" o
+    // "ano" de "año") nunca bloquean aunque choquen con otro idioma.
     private final List<String> entries = new ArrayList<>();
+    private final Set<String> allow = new LinkedHashSet<>();
     private int[] fail = new int[0];
     private int[] childHead = new int[0];
     private char[] edgeChar = new char[0];
@@ -112,6 +115,29 @@ public class ProfanityFilterService {
         }
         buildAutomaton();
         wordCount = entries.size();
+
+        try {
+            PathMatchingResourcePatternResolver allowResolver = new PathMatchingResourcePatternResolver();
+            Resource[] allowResources = allowResolver.getResources("classpath:allow-words-*.txt");
+            for (Resource resource : allowResources) {
+                try (InputStream in = resource.getInputStream();
+                        BufferedReader reader = new BufferedReader(
+                                new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        String word = normalize(line.trim());
+                        if (!word.isEmpty()) {
+                            allow.add(word);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("No se pudo leer {}: {}", resource.getFilename(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("No se encontraron listas en classpath:allow-words-*.txt");
+        }
+
         log.info("Filtro de lenguaje cargado con {} palabras (enabled={})", wordCount, properties.isEnabled());
     }
 
@@ -296,7 +322,11 @@ public class ProfanityFilterService {
                     }
                     if ((start == 0 || !isWordChar(normalized.charAt(start - 1)))
                             && (i + 1 == normalized.length() || !isWordChar(normalized.charAt(i + 1)))) {
-                        return normalized.substring(start, i + 1);
+                        // La lista de permitidas gana: español común que choca
+                        // con insultos de otro idioma ("con", "ano" de "año").
+                        if (!allow.contains(entries.get(id))) {
+                            return normalized.substring(start, i + 1);
+                        }
                     }
                 }
             }
@@ -338,7 +368,7 @@ public class ProfanityFilterService {
             candidates.add(token.replaceAll("^[0-9]+|[0-9]+$", ""));
         }
         for (String token : candidates) {
-            if (!token.isEmpty() && matchesWhole(token)) {
+            if (!token.isEmpty() && !allow.contains(token) && matchesWhole(token)) {
                 throw new IllegalArgumentException(
                         "Ese nombre de usuario contiene lenguaje no permitido. Elegí otro.");
             }
