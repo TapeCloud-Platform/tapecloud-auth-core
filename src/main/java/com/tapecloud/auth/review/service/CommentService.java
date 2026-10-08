@@ -1,6 +1,7 @@
 package com.tapecloud.auth.review.service;
 
 import com.tapecloud.auth.moderation.ProfanityFilterService;
+import com.tapecloud.auth.exception.TooManyAttemptsException;
 import com.tapecloud.auth.review.dto.CommentRequest;
 import com.tapecloud.auth.review.dto.CommentResponse;
 import com.tapecloud.auth.review.entity.Comment;
@@ -9,8 +10,11 @@ import com.tapecloud.auth.review.repository.CommentRepository;
 import com.tapecloud.auth.review.repository.ReviewRepository;
 import com.tapecloud.auth.user.entity.AppUser;
 import com.tapecloud.auth.user.repository.AppUserRepository;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +27,9 @@ public class CommentService {
     private final ReviewRepository reviewRepository;
     private final AppUserRepository userRepository;
     private final ProfanityFilterService profanityFilterService;
+
+    @Value("${app.comment.cooldown-seconds:30}")
+    private long commentCooldownSeconds;
 
     public CommentService(
             CommentRepository commentRepository,
@@ -57,6 +64,19 @@ public class CommentService {
 
         AppUser user = userRepository.findByEmailIgnoreCase(userEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        // Un comentario cada 30 segundos por usuario (429 si es muy pronto),
+        // igual que el cooldown de edición de reseñas.
+        Instant now = Instant.now();
+        commentRepository.findTopByAuthorEmailIgnoreCaseOrderByCreatedAtDesc(userEmail)
+                .ifPresent(last -> {
+                    // elapsed negativo (reloj desfasado) se trata como 0: espera el cooldown completo, nunca más.
+                    long elapsed = Math.max(0, Duration.between(last.getCreatedAt(), now).getSeconds());
+                    if (elapsed < commentCooldownSeconds) {
+                        throw new TooManyAttemptsException(
+                                "Podés volver a comentar en " + (commentCooldownSeconds - elapsed) + " segundos");
+                    }
+                });
 
         profanityFilterService.requireClean(request.body(), "El comentario");
 

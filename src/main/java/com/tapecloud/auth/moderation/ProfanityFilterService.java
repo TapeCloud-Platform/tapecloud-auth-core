@@ -67,7 +67,7 @@ public class ProfanityFilterService {
     }
 
     @PostConstruct
-    void load() {
+    public void load() {
         Set<String> words = new LinkedHashSet<>();
         try {
             PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();

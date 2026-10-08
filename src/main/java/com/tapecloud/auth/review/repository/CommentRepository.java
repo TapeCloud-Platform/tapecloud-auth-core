@@ -2,6 +2,7 @@ package com.tapecloud.auth.review.repository;
 
 import com.tapecloud.auth.review.entity.Comment;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,4 +24,6 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
     void deleteByReviewId(UUID reviewId);
 
     void deleteByAuthorEmailIgnoreCase(String authorEmail);
+
+    Optional<Comment> findTopByAuthorEmailIgnoreCaseOrderByCreatedAtDesc(String authorEmail);
 }
